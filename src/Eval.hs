@@ -39,15 +39,15 @@ evalSubst' _ (EStringLit n) = EStringLit n
 evalSubst' _ (EFreeVar name) = EFreeVar name
 evalSubst' s (EApp f a) = EApp (evalSubst' s f) (evalSubst' s a)
 
-evalSubst' s (EBoundVar s n)
+evalSubst' s (EBoundVar name n)
     | n < V.length s  = s V.! n
-    | otherwise = EBoundVar s n
+    | otherwise = EBoundVar name n
 
 evalSubst' s (EAbs v ty term) =
     -- We enlarge the substitution context, because the 0 parameter is not free, so it must not be substituted,
     -- if not by itself
     let s' = V.cons (EBoundVar v 0) s
-    EAbs v ty (evalSubst' s' term)
+    in EAbs v ty (evalSubst' s' term)
 
 
 -- Since we allow for definitions, we must also keep an environment of the available definitions
@@ -77,18 +77,18 @@ eval e s (EFreeVar name) =
         Nothing   -> error $ "Unbound name: " ++ name
         Just exp  -> eval e s exp
 
-eval e s v@(EBoundVar _ n) = eval idSubst (evalSubst s v)
+eval e s v@(EBoundVar _ n) = eval e idSubst (evalSubst s v)
 
-eval e s f@(EAbs _ _ _) = eval idSubst (evalSubst s f)
+eval e s f@(EAbs _ _ _) = eval e idSubst (evalSubst s f)
 
-eval e b s (EApp f a) =
+eval e s (EApp f a) =
     -- In this case we don't want to perform substitutions, they will be performed later,
     -- when we run beta reduction, so we pass an empty substitution context
     case eval e idSubst f of
         (EAbs _ _ body) ->
             let a' = eval e s a
-                s' = a' : s
-            in eval e b s' body
+                s' = V.cons a' s
+            in eval e s' body
         _ -> error $ "Invalid type of left argument in application, it should be a function"
 
 

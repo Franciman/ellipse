@@ -22,14 +22,14 @@ typeCheck :: TypingEnv -> BoundVarEnv -> EExpr -> Maybe EType
 typeCheck _ _ ETrue =  return EBool
 typeCheck _ _ EFalse = return EBool
 typeCheck e b (EIf cond tBranch fBranch) = do
-    typeCheck e b cond >>= unify EBool
+    typeCheck e b cond >>= unifyTypes EBool
     tBranchType <- typeCheck e b tBranch
     fBranchType <- typeCheck e b fBranch
     unifyTypes tBranchType fBranchType
 
-typeCheck _ _ (EIntLit _) = EInt
-typeCheck _ _ (EFloatLit _) = EFloat
-typeCheck _ _ (EStringLit _) = EString
+typeCheck _ _ (EIntLit _) = Just EInt
+typeCheck _ _ (EFloatLit _) = Just EFloat
+typeCheck _ _ (EStringLit _) = Just EString
 
 typeCheck e b (ELet name def body) = do
     defType <- typeCheck e b def
@@ -40,7 +40,7 @@ typeCheck e b (EFreeVar name) = M.lookup name e
 
 typeCheck e b (EBoundVar _ n)
     | n < V.length b = return (b V.! n)
-    | otherwie       = Nothing
+    | otherwise      = Nothing
 
 typeCheck e b (EAbs _ ty body) = do
     let newBoundVarEnv = V.cons ty b
@@ -52,6 +52,6 @@ typeCheck e b (EApp f a) = do
     aTy <- typeCheck e b a
     case fTy of
         EFunction dom cod -> do
-            unify dom aTy
+            unifyTypes dom aTy
             return cod
         _                 -> Nothing
