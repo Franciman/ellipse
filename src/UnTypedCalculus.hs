@@ -1,4 +1,4 @@
-module EnvBasedEval where
+module UnTypedCalculus where
 
 import qualified Data.Sequence as S
 
@@ -43,15 +43,25 @@ eval defs env (FreeVar idx) =
 eval defs env (Abs argCount body) = Closure env argCount body
 
 eval defs env (App f gs) =
-    let fval = eval defs env f
-    in case fval of
-        Closure env' argCount body ->
+        let fval = eval defs env f
+        in evalApp fval gs
+
+    where evalApp (Closure env' argCount body) gs =
             case compare argCount (S.length gs) of
-                LT -> error "Wrong argument count"
+                LT ->
+                    -- Right now we can't know if this is ill posed,
+                    -- because the parameters could change the number of applications
+                    -- allowed, so we just take the first `argCount` params, apply them
+                    -- and then see what happens to the resulting ones.
+                    let (toApplyNow, toApplyLater) = S.splitAt argCount gs
+                        vals = fmap (eval defs env) toApplyNow
+                        newEnv = S.reverse vals S.>< env'
+                        newLhs = eval defs newEnv body
+                    in evalApp newLhs toApplyLater
                 GT ->
                     -- We perform partial application, so we return a closure
                     -- with just some arguments added and the rest are left as arguments to the lambda
-                    let argsLeft = S.length gs - argCount
+                    let argsLeft = argCount - S.length gs
                         gVals = fmap (eval defs env) gs
                         newEnv = S.reverse gVals S.>< env'
                     in Closure newEnv argsLeft body

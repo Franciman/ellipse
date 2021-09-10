@@ -2,93 +2,70 @@ module Eval where
 
 import qualified CoreSyntaxTree as C
 import Type
+import qualified Env as E
+import qualified Data.Text as T
 
-import qualified Data.Map.Strict as M
-import qualified Data.Vector as V
+import qualified Data.Sequence as S
+
+import Data.Maybe (fromJust)
 
 -- We define an interpreter for our language directly on SyntaxTree terms.
 -- Since we allow definitions, how should we deal with them?
---
--- Our semantics is strongly based on substitution, so we go the explicit substitution way.
--- But instead of annotating terms with their substitution, we keep an explicit substitution context
--- as parameter of the evaluator.
+-- We deal with them and with substitution using an environment based interpreter.
+-- Since we are using locally nameless representation, we use two different environments,
+-- one for free variables and one for bound variables.
+-- Let bindings are interpreted as if they were lambda functions applied to the new definition
 
--- Now we generate the free monoid over Subst, so we can have substitution append easily
--- The indices are automatically computed and shifted by the position in the list
-type Subst = V.Vector C.Expr
+-- This is the result of the evaluation process
+data Value = Closure Env C.Expr
+    | IntLit Int
+    | FloatLit Float
+    | StringLit T.Text
+    | BoolLit Bool
 
-idSubst = V.empty
-
--- Finally let us evaluate substitutions
-evalSubst :: Subst -> C.Expr -> C.Expr
-evalSubst subst expr
-    -- we have nothing to do here
-    | V.null subst = expr
-    | otherwise    = evalSubst' subst expr
-
-evalSubst' :: Subst -> C.Expr -> C.Expr
-evalSubst' _ C.True = C.True
-evalSubst' _ C.False = C.False
-evalSubst' s (C.If cond tBranch fBranch) =
-    C.If (evalSubst' s cond) (evalSubst' s tBranch) (evalSubst' s fBranch)
-
-evalSubst' _ (C.IntLit n) = C.IntLit n
-evalSubst' _ (C.FloatLit n) = C.FloatLit n
-evalSubst' _ (C.StringLit n) = C.StringLit n
-
-evalSubst' _ (C.FreeVar name) = C.FreeVar name
-evalSubst' s (C.App f a) = C.App (evalSubst' s f) (evalSubst' s a)
-
-evalSubst' s (C.BoundVar name n)
-    | n < V.length s  = s V.! n
-    | otherwise = C.BoundVar name n
-
-evalSubst' s (C.Abs v ty term) =
-    -- We enlarge the substitution context, because the 0 parameter is not free, so it must not be substituted,
-    -- if not by itself
-    let s' = V.cons (C.BoundVar v 0) s
-    in C.Abs v ty (evalSubst' s' term)
-
-
--- Since we allow for definitions, we must also keep an environment of the available definitions
--- This separation is necessary because we work with locally nameless representation, so free variables
--- are named, are represented as strings.
-type Env = M.Map String C.Expr
+type Env = E.Env Value
 
 -- eval implements the call-by-value evaluation strategy for function application
-eval :: Env -> Subst -> C.Expr -> C.Expr
-eval _ _ C.True = C.True
-eval _ _ C.False = C.False
-eval e s (C.If cond tBranch fBranch) =
-    case eval e s cond of
-        C.True  -> eval e s tBranch
-        C.False -> eval e s fBranch
+-- This is a SECD machine, but the S(tack) and the D(ump) are encoded in the call stack
+-- of the recursive function definition.
+-- We assume that the input term is well typed! (in particular it is well scoped).
+-- This assumption helps us ignoring some erroneous conditions. Furthermore,
+-- the locally nameless representation, when well scoped, allows us to avoid
+-- the need of variable shifting.
+eval :: Env -> Env -> C.Expr -> Value
+eval _ _ C.True = BoolLit True
+eval _ _ C.False = BoolLit False
+eval e b (C.If cond tBranch fBranch) =
+    case eval e b cond of
+        BoolLit True  -> eval e b tBranch
+        BoolLit False -> eval e b fBranch
 
-eval _ _ (C.IntLit n)    = C.IntLit n
-eval _ _ (C.FloatLit n)  = C.FloatLit n
-eval _ _ (C.StringLit n) = C.StringLit n
+eval _ _ (C.IntLit n)    = IntLit n
+eval _ _ (C.FloatLit n)  = FloatLit n
+eval _ _ (C.StringLit n) = StringLit n
 
-eval e s (C.Let name def body) =
-    let newEnv = M.insert name def e
-    in eval newEnv s body
+-- `let x = f in g(x)` is interpreted as if it were (\x. g(x)) f
+eval e b (C.Let name def body) =
+    let defValue = eval e b def
+        newBoundEnv = E.bind defValue b
+    in eval e newBoundEnv body
 
-eval e s (C.FreeVar name) =
-    case M.lookup name e of
-        Nothing   -> error $ "Unbound name: " ++ name
-        Just exp  -> eval e s exp
+eval e b (C.FreeVar _ index) = fromJust (E.lookup index e)
 
-eval e s v@(C.BoundVar _ n) = eval e idSubst (evalSubst s v)
+eval e b v@(C.BoundVar _ index) = fromJust (E.lookup index b)
 
-eval e s f@(C.Abs _ _ _) = eval e idSubst (evalSubst s f)
+-- We create a closure with respect to the current bound variables environment
+eval e b f@(C.Abs params _ body) = Closure b body
 
-eval e s (C.App f a) =
-    -- In this case we don't want to perform substitutions, they will be performed later,
-    -- when we run beta reduction, so we pass an empty substitution context
-    case eval e idSubst f of
-        (C.Abs _ _ body) ->
-            let a' = eval e s a
-                s' = V.cons a' s
-            in eval e s' body
-        _ -> error $ "Invalid type of left argument in application, it should be a function"
+-- This is the most subtle clause of all. Here we leverage well typedness a lot.
+-- First of all we can expect that the evaluation of the lhs results in a closure value,
+-- secondly, we don't even check the number of arguments, because we know that the result is a value,
+-- thanks to well typedness, so we insert them all in the environment, because sooner or later
+-- they will be used.
+eval e b (C.App f as) =
+    let (Closure bEnv' body) = eval e b f
+        aVals = fmap (eval e b) as
+        newBoundEnv = E.bindMany aVals bEnv'
+    in eval e newBoundEnv body
 
 

@@ -1,57 +1,67 @@
 module TypeCheck where
 
-import SyntaxTree
+import qualified CoreSyntaxTree as C
 import Type
+import qualified Env as E
 
-import qualified Data.Map.Strict as M
-import qualified Data.Vector as V
+import qualified Data.Sequence as S
 
-type TypingEnv = M.Map String EType
+import Control.Monad (foldM)
 
-type BoundVarEnv = V.Vector EType
+type TypingEnv = E.Env EType
 
--- We use the Maybe monad semantics to deal with errors compositionally
+-- We use the Either monad semantics to deal with errors compositionally
+type TypingError = String
+
+type TypeCheck a = Either TypingError a
 
 -- Unify two types, in our simple type system unification is just checking for equality
-unifyTypes :: EType -> EType -> Maybe EType
+unifyTypes :: EType -> EType -> TypeCheck EType
 unifyTypes t1 t2
-    | t1 == t2  = Just t1
-    | otherwise = Nothing
+    | t1 == t2  = Right t1
+    | otherwise = Left "Type mismatch"
 
-typeCheck :: TypingEnv -> BoundVarEnv -> EExpr -> Maybe EType
-typeCheck _ _ ETrue =  return EBool
-typeCheck _ _ EFalse = return EBool
-typeCheck e b (EIf cond tBranch fBranch) = do
-    typeCheck e b cond >>= unifyTypes EBool
-    tBranchType <- typeCheck e b tBranch
-    fBranchType <- typeCheck e b fBranch
+-- typeCheck has two environments as input, one for global definitions,
+-- i.e. free variables in the term, and one for bound variables, occurring
+-- when analyzing lambda terms bodies.
+typeCheck :: TypingEnv -> TypingEnv -> C.Expr -> TypeCheck EType
+typeCheck _ _ C.True =  return EBool
+typeCheck _ _ C.False = return EBool
+typeCheck d b (C.If cond tBranch fBranch) = do
+    typeCheck d b cond >>= unifyTypes EBool
+    tBranchType <- typeCheck d b tBranch
+    fBranchType <- typeCheck d b fBranch
     unifyTypes tBranchType fBranchType
 
-typeCheck _ _ (EIntLit _) = Just EInt
-typeCheck _ _ (EFloatLit _) = Just EFloat
-typeCheck _ _ (EStringLit _) = Just EString
+typeCheck _ _ (C.IntLit _)    = return EInt
+typeCheck _ _ (C.FloatLit _)  = return EFloat
+typeCheck _ _ (C.StringLit _) = return EString
 
-typeCheck e b (ELet name def body) = do
-    defType <- typeCheck e b def
-    let newEnv = M.insert name defType e
-    typeCheck newEnv b body
+typeCheck d b (C.Let name def body) = do
+    defType <- typeCheck d b def
+    let newBoundEnv = E.bind defType b
+    typeCheck d newBoundEnv body
 
-typeCheck e b (EFreeVar name) = M.lookup name e
+typeCheck d b (C.FreeVar _ index) =
+    maybe (Left "Unbound variable") Right (E.lookup index d)
 
-typeCheck e b (EBoundVar _ n)
-    | n < V.length b = return (b V.! n)
-    | otherwise      = Nothing
+typeCheck d b (C.BoundVar _ index) =
+    maybe (Left "Unbound variable") Right (E.lookup index b)
 
-typeCheck e b (EAbs _ ty body) = do
-    let newBoundVarEnv = V.cons ty b
-    codomainTy <- typeCheck e newBoundVarEnv body
-    return $ EFunction ty codomainTy
 
-typeCheck e b (EApp f a) = do
-    fTy <- typeCheck e b f
-    aTy <- typeCheck e b a
-    case fTy of
-        EFunction dom cod -> do
-            unifyTypes dom aTy
-            return cod
-        _                 -> Nothing
+typeCheck d b (C.Abs _ tys body) = do
+    let newBoundEnv = E.bindMany tys b
+    codomainTy <- typeCheck d newBoundEnv body
+    return (curryFunction tys codomainTy)
+
+typeCheck d b (C.App f as) = do
+        fTy <- typeCheck d b f
+        asTy <- mapM (typeCheck d b) as
+        foldM partialApplyTypeCheck fTy asTy
+
+    where partialApplyTypeCheck currTy aTy =
+            case currTy of
+                EFunction dom cod -> do
+                    unifyTypes dom aTy
+                    return cod
+                _  -> Left "Can't unify domain with argument"
