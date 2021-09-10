@@ -36,9 +36,9 @@ eval :: Env -> Env -> C.Expr -> Value
 eval _ _ C.True = BoolLit True
 eval _ _ C.False = BoolLit False
 eval e b (C.If cond tBranch fBranch) =
-    case eval e b cond of
-        BoolLit True  -> eval e b tBranch
-        BoolLit False -> eval e b fBranch
+    let (BoolLit condVal) = eval e b cond
+    in if condVal then eval e b tBranch else eval e b fBranch
+
 
 eval _ _ (C.IntLit n)    = IntLit n
 eval _ _ (C.FloatLit n)  = FloatLit n

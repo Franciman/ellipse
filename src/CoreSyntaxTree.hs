@@ -26,7 +26,7 @@ data Expr = If Expr Expr Expr
            | BoundVar T.Text Int
            -- ^ For bound vars we also keep the original name, so we can eventually reconstruct
            -- the named representation of the term
-           | Abs (S.Seq T.Text) (S.Seq EType) Expr
+           | Abs (S.Seq T.Text) (S.Seq Type) Expr
            -- ^ For abstractions we do the same, we keep the original name of the bound variables
            -- ^ Together with their types (necessary for typechecking)
            | App Expr (S.Seq Expr)
