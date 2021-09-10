@@ -5,6 +5,8 @@ import qualified CoreSyntaxTree as Core
 import qualified Data.Map.Strict as M
 import qualified Data.Sequence as S
 
+import qualified Env as E
+
 import Data.Foldable (foldl')
 import Control.Arrow (first)
 
@@ -17,6 +19,7 @@ data ELit = EBool Bool
           | EInt Int
           | EFloat Float
           | EString T.Text
+          deriving(Show)
 
 data Expr = ECond [(Expr, Expr)] Expr
     | ELiteral ELit
@@ -24,9 +27,11 @@ data Expr = ECond [(Expr, Expr)] Expr
     | EVar T.Text
     | ELambda [(T.Text, Type)] Expr
     | EApp Expr [Expr]
+    deriving(Show)
 
 data Decl = Decl T.Text Expr
     | FunDecl T.Text [(T.Text, Type)] Expr
+    deriving(Show)
 
 declName :: Decl -> T.Text
 declName (Decl name _) = name
@@ -37,6 +42,7 @@ declName (FunDecl name _ _) = name
 -- To do this, we have to get access to all the declarations in the program.
 -- We associate an index to them, according to their order. Note that each
 -- definition can depend on all the other, but they can't depend on themselves.
+-- We also return the environment to use for free variables.
 
 type NamingEnv  = M.Map T.Text Int
 type BindingEnv = S.Seq T.Text
@@ -51,13 +57,22 @@ lookupBinding :: T.Text -> BindingEnv -> Maybe Int
 lookupBinding = S.elemIndexL
 
 -- Decls must have unique names
+-- Each decl can only refer to the previous ones.
+-- The result is a list of core decls, ordered so that, each free variable with index i,
+-- refers to the i-th element of the list
 compile :: [Decl] -> [Core.Decl]
-compile [] = []
-compile ds =
-    -- Let us first assign to each declaration an index and let us put them
-    -- in the naming environment
-    let namingEnv = M.fromList $ zipWith (\decl idx -> (declName decl, idx)) ds [0..]
-    in map (compileDecl namingEnv S.empty) ds
+compile = compile' M.empty
+
+compile' :: NamingEnv -> [Decl] -> [Core.Decl]
+compile' accessibleDefs [] = []
+compile' accessibleDefs (d:ds) =
+    -- We first compile this definition considering only accessible definitions
+    let coreDecl = compileDecl accessibleDefs S.empty d
+    -- then we add this definition to the list of accessible ones, by giving it
+    -- the next index available (remember that we use consecutive integers,
+    -- so this index is given by the size of the accessibleDefs map)
+        newAccessibleDefs = M.insert (declName d) (M.size accessibleDefs) accessibleDefs
+    in coreDecl : compile' newAccessibleDefs ds
 
 compileDecl :: NamingEnv -> BindingEnv -> Decl -> Core.Decl
 compileDecl env boundEnv (Decl name body) = Core.Decl name (compileExpr env boundEnv body)

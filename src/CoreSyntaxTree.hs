@@ -33,3 +33,6 @@ data Expr = If Expr Expr Expr
 
 -- A top level declaration
 data Decl = Decl T.Text Expr
+
+declName :: Decl -> T.Text
+declName (Decl name _) = name

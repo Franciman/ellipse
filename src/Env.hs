@@ -15,6 +15,7 @@ import Data.Foldable (foldl')
 newtype Env a = Env
     { unwrap :: S.Seq a
     }
+    deriving(Show)
 
 empty :: Env a
 empty = Env S.empty

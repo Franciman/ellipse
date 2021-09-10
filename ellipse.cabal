@@ -20,14 +20,14 @@ category:           Language
 extra-source-files: CHANGELOG.md
 
 library
-    exposed-modules:  SyntaxTree, CoreSyntaxTree, Type, TypeCheck, Eval, Env, UnTypedCalculus
+    exposed-modules:  Interpreter, SyntaxTree, CoreSyntaxTree, Type, TypeCheck, Eval, Env, UnTypedCalculus, Parser, Repl
 
     -- Modules included in this library but not exported.
     -- other-modules:
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.14.2.0, containers, text, megaparsec
+    build-depends:    base ^>=4.14.2.0, containers, text, megaparsec, parser-combinators
     hs-source-dirs:   src
     default-language: Haskell2010
 
@@ -41,6 +41,7 @@ executable ellipse
     -- other-extensions:
     build-depends:
         base ^>=4.14.2.0,
+        text,
         ellipse
 
     hs-source-dirs:   app

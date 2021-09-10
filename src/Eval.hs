@@ -23,6 +23,13 @@ data Value = Closure Env C.Expr
     | StringLit T.Text
     | BoolLit Bool
 
+instance Show Value where
+    show (Closure _ _) = "<closure>"
+    show (IntLit n) = show n
+    show (FloatLit n) = show n
+    show (StringLit n) = show n
+    show (BoolLit n) = show n
+
 type Env = E.Env Value
 
 -- eval implements the call-by-value evaluation strategy for function application
@@ -69,3 +76,6 @@ eval e b (C.App f as) =
     in eval e newBoundEnv body
 
 
+-- Entry point for evaluation
+runEval :: Env -> C.Expr -> Value
+runEval env expr = eval env E.empty expr

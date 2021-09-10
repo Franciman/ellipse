@@ -8,7 +8,7 @@ data Type = TBool
     | TInt
     | TFloat
     | TFunction Type Type
-    deriving(Eq)
+    deriving(Eq, Show)
 
 -- A funky function assigning size to a type
 
