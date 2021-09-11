@@ -23,7 +23,7 @@ integer := [0-9]+
 float   := [0-9]+ `.` [0-9]+
 string  := `"` [^"]* `"`
 
-reserved_keywords := `cond`, `lam`, `let`, `true`, `false`. `else`, `def`
+reserved_keywords := `cond`, `lam`, `let`, `true`, `false`. `else`, `def`, `fix`, `equal`
 ident   := ID_Start ID_Continue* but not reserved_keywords
 
 type  := facile
@@ -31,8 +31,10 @@ type  := facile
 cond   := `cond` `{` (expr `->` `{` expr `}` `}`
 let    := `let` (decl)* `{` expr `}`
 lambda := `lam` `[` (ident `:` type)+ `]` `{` expr `}`
+fix    := `fix` expr
+equal  := `equal` expr expr
 
-expr   := cond | let | lambda | ident
+expr   := cond | let | lambda | ident | fix | equal
         | `(` expr `)`
         | expr expr
 
@@ -86,6 +88,7 @@ reservedKeywords =
     , "false"
     , "else"
     , "def"
+    , "fix"
     ]
 
 identifier :: Parser T.Text
@@ -120,22 +123,22 @@ cond = do
         symbol "cond"
         block $ do
             clauses <- manyTill clause (symbol "else")
-            symbol "else"
-            symbol "->"
+            symbol "~>"
             elseClause <- block expr
             return $ ECond clauses elseClause
     where
         clause = do
             cond <- expr
-            symbol "->"
+            symbol "~>"
             body <- block expr
             return (cond, body)
 
 letParser :: Parser Expr
 letParser = do
     symbol "let"
-    decls <- manyTill decl (char '{')
-    body <- block expr
+    decls <- manyTill decl (symbol "{")
+    body <- expr
+    symbol "}"
     return $ ELet decls body
 
 args :: Parser [(T.Text, Type)]
@@ -153,6 +156,25 @@ lambda = do
     body <- block expr
     return $ ELambda params body
 
+fix :: Parser Expr
+fix = do
+    symbol "fix"
+    EFix <$> expr
+
+builtin :: Parser Expr
+builtin = choice
+        [ symbol "+" $> EBuiltinOp ESum
+        , symbol "-" $> EBuiltinOp ESub
+        , symbol "*" $> EBuiltinOp EProd
+        , symbol "/" $> EBuiltinOp EDiv
+        , symbol "&&" $> EBuiltinOp EAnd
+        , symbol "||" $> EBuiltinOp EOr
+        , symbol "!" $> EBuiltinOp ENot
+        , symbol "<" $> EBuiltinOp ELessThan
+        , symbol ">" $> EBuiltinOp EGreaterThan
+        , symbol "=" $> EBuiltinOp EEqual
+        ]
+
 exprAtom :: Parser Expr
 exprAtom = choice
     [ symbol "(" *> expr <* symbol ")"
@@ -160,7 +182,9 @@ exprAtom = choice
     , cond
     , letParser
     , lambda
+    , fix
     , literal
+    , builtin
     ]
 
 expr :: Parser Expr

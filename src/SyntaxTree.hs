@@ -21,11 +21,16 @@ data ELit = EBool Bool
           | EString T.Text
           deriving(Show)
 
+data EOp = ESum | ESub | EProd | EDiv | EAnd | EOr | ENot | ELessThan | EGreaterThan | EEqual
+    deriving(Show)
+
 data Expr = ECond [(Expr, Expr)] Expr
     | ELiteral ELit
+    | EBuiltinOp EOp
     | ELet [Decl] Expr
     | EVar T.Text
     | ELambda [(T.Text, Type)] Expr
+    | EFix Expr
     | EApp Expr [Expr]
     deriving(Show)
 
@@ -89,11 +94,21 @@ compileExpr env boundEnv (ECond conds defaultCase) =
     let makeIf (cond, body) = Core.If (compileExpr env boundEnv cond) (compileExpr env boundEnv body)
     in foldr makeIf (compileExpr env boundEnv defaultCase) conds
 
-compileExpr _ _ (ELiteral (EBool True))  = Core.True
-compileExpr _ _ (ELiteral (EBool False)) = Core.False
+compileExpr _ _ (ELiteral (EBool b))  = Core.BoolLit b
 compileExpr _ _ (ELiteral (EInt n))      = Core.IntLit n
 compileExpr _ _ (ELiteral (EFloat n))    = Core.FloatLit n
-compileExpr _ _ (ELiteral (EString n))    = Core.StringLit n
+compileExpr _ _ (ELiteral (EString n))   = Core.StringLit n
+
+compileExpr _ _ (EBuiltinOp ESum)         = Core.BuiltinOp Core.Sum
+compileExpr _ _ (EBuiltinOp ESub)         = Core.BuiltinOp Core.Sub
+compileExpr _ _ (EBuiltinOp EProd)        = Core.BuiltinOp Core.Prod
+compileExpr _ _ (EBuiltinOp EDiv)         = Core.BuiltinOp Core.Div
+compileExpr _ _ (EBuiltinOp EAnd)         = Core.BuiltinOp Core.And
+compileExpr _ _ (EBuiltinOp EOr)          = Core.BuiltinOp Core.Or
+compileExpr _ _ (EBuiltinOp ENot)         = Core.BuiltinOp Core.Not
+compileExpr _ _ (EBuiltinOp ELessThan)    = Core.BuiltinOp Core.LessThan
+compileExpr _ _ (EBuiltinOp EGreaterThan) = Core.BuiltinOp Core.GreaterThan
+compileExpr _ _ (EBuiltinOp EEqual)       = Core.BuiltinOp Core.Equal
 
 -- Right now this is inefficient. It compiles
 -- it in a list of nested lets, maybe it is better to move
@@ -104,6 +119,9 @@ compileExpr env boundEnv (ELet decls body) =
         -- We need to bind all the definitions we introduced with the let
         newBoundEnv = addBindings (map declName decls) boundEnv
     in foldr makeLet (compileExpr env newBoundEnv body) decls
+
+compileExpr env boundEnv (EFix body) =
+    Core.Fix (compileExpr env boundEnv body)
 
 -- We first check the variable has been bound
 compileExpr env boundEnv (EVar name) =

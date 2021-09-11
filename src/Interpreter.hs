@@ -7,6 +7,10 @@ module Interpreter where
 import Parser
 import SyntaxTree
 import Eval
+import TypeCheck
+import Control.Monad (forM)
+import Data.Time.Clock
+import Control.DeepSeq
 
 import qualified CoreSyntaxTree as Core
 
@@ -24,6 +28,20 @@ checkDuplicates names = go S.empty names
             | S.member n s = Just n
             | otherwise    = go (S.insert n s) ns
 
+-- When performing typechecking we need to take into account that definitions
+-- can only depend on previous definitions, so each definition that gets
+-- typechecked is added to the environment for the next ones
+typeCheckProgram :: TypingEnv -> [Core.Decl] -> IO (Maybe String)
+typeCheckProgram _ [] = return Nothing
+typeCheckProgram env (Core.Decl name body:ds) = do
+    let tp = typeCheck env E.empty body
+    case tp of
+        Left err -> return (Just err)
+        Right ty -> do
+            putStrLn $ show name ++ " has type: " ++ show ty
+            typeCheckProgram (E.bind ty env) ds
+
+
 -- Now let us evaluate all definitions, until we get to the main
 -- program, it will give us our value. Observe that
 -- given the fact that each definition only depends from the
@@ -38,6 +56,21 @@ evalProgram env (Core.Decl name body:ds) = do
     then print val
     else evalProgram (E.bind val env) ds
 
+
+-- Fully evaluate result
+timed :: NFData a => String -> IO a -> IO a
+timed label action = do
+    startTime <- getCurrentTime
+    res <- action
+    endTime <- res `deepseq` getCurrentTime
+    let duration = diffUTCTime endTime startTime
+    putStrLn $ label ++ " took: " ++ show duration
+    return res
+
+haskellFact :: Int -> Int
+haskellFact 0 = 1
+haskellFact n = n * haskellFact (n-1)
+
 runInterpreter :: T.Text -> IO ()
 runInterpreter input = do
     case parseProgram input of
@@ -50,8 +83,10 @@ runInterpreter input = do
                     -- there is no duplication, so we can convert our program
                     -- to a core representation
                     let coreDefs = compile defs
-                    evalProgram E.empty coreDefs
-
-
-
+                    error <- timed "Typechecking" $ typeCheckProgram E.empty coreDefs
+                    case error of
+                        Just err -> putStrLn $ "TypeCheck error: " ++ err
+                        Nothing -> do
+                            timed "Evaluation" $ evalProgram E.empty coreDefs
+                            timed "Haskell Eval" $ print $ haskellFact 15
 

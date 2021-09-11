@@ -19,14 +19,13 @@ type TypeCheck a = Either TypingError a
 unifyTypes :: Type -> Type -> TypeCheck Type
 unifyTypes t1 t2
     | t1 == t2  = Right t1
-    | otherwise = Left "Type mismatch"
+    | otherwise = Left $ "Can't unify type: `" ++ show t1 ++ "` with type: `" ++ show t2 ++ "`"
 
 -- typeCheck has two environments as input, one for global definitions,
 -- i.e. free variables in the term, and one for bound variables, occurring
 -- when analyzing lambda terms bodies.
 typeCheck :: TypingEnv -> TypingEnv -> C.Expr -> TypeCheck Type
-typeCheck _ _ C.True =  return TBool
-typeCheck _ _ C.False = return TBool
+typeCheck _ _ (C.BoolLit _) =  return TBool
 typeCheck d b (C.If cond tBranch fBranch) = do
     typeCheck d b cond >>= unifyTypes TBool
     tBranchType <- typeCheck d b tBranch
@@ -37,16 +36,36 @@ typeCheck _ _ (C.IntLit _)    = return TInt
 typeCheck _ _ (C.FloatLit _)  = return TFloat
 typeCheck _ _ (C.StringLit _) = return TString
 
+typeCheck _ _ (C.BuiltinOp C.Sum) = return $ TFunction TInt (TFunction TInt TInt)
+typeCheck _ _ (C.BuiltinOp C.Sub) = return $ TFunction TInt (TFunction TInt TInt)
+typeCheck _ _ (C.BuiltinOp C.Prod) = return $ TFunction TInt (TFunction TInt TInt)
+typeCheck _ _ (C.BuiltinOp C.Div) = return $ TFunction TFloat (TFunction TFloat TFloat)
+typeCheck _ _ (C.BuiltinOp C.And) = return $ TFunction TBool (TFunction TBool TBool)
+typeCheck _ _ (C.BuiltinOp C.Or) = return $ TFunction TBool (TFunction TBool TBool)
+typeCheck _ _ (C.BuiltinOp C.Not) = return $ TFunction TBool TBool
+typeCheck _ _ (C.BuiltinOp C.LessThan) = return $ TFunction TInt (TFunction TInt TBool)
+typeCheck _ _ (C.BuiltinOp C.GreaterThan) = return $ TFunction TInt (TFunction TInt TBool)
+typeCheck _ _ (C.BuiltinOp C.Equal) = return $ TFunction TInt (TFunction TInt TBool)
+
 typeCheck d b (C.Let name def body) = do
     defType <- typeCheck d b def
     let newBoundEnv = E.bind defType b
     typeCheck d newBoundEnv body
 
-typeCheck d b (C.FreeVar _ index) =
-    maybe (Left "Unbound variable") Right (E.lookup index d)
+typeCheck d b (C.Fix body) = do
+    ty <- typeCheck d b body
+    case ty of
+        -- Since we must feed us to ourselves domain and codomain must be the same
+        TFunction dom cod -> unifyTypes dom cod
+        _ -> Left "Expected function as argument of fix"
 
-typeCheck d b (C.BoundVar _ index) =
-    maybe (Left "Unbound variable") Right (E.lookup index b)
+
+typeCheck d b (C.FreeVar name index) =
+    maybe (Left $ "Undefined variable: " ++ show name) Right (E.lookup index d)
+
+typeCheck d b (C.BoundVar name index) =
+    maybe (Left $ "Unbound variable: " ++ show name ++ " with index: " ++ show index)
+          Right (E.lookup index b)
 
 
 typeCheck d b (C.Abs _ tys body) = do
@@ -64,4 +83,4 @@ typeCheck d b (C.App f as) = do
                 TFunction dom cod -> do
                     unifyTypes dom aTy
                     return cod
-                _  -> Left "Can't unify domain with argument"
+                t  -> Left $ "Expected function type, but got: " ++ show t

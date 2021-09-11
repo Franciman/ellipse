@@ -8,7 +8,21 @@ data Type = TBool
     | TInt
     | TFloat
     | TFunction Type Type
-    deriving(Eq, Show)
+    deriving(Eq)
+
+prettyPrintType :: Type -> String
+prettyPrintType TBool = "Bool"
+prettyPrintType TString = "String"
+prettyPrintType TInt = "Int"
+prettyPrintType TFloat = "Float"
+prettyPrintType (TFunction left@(TFunction _ _) right) =
+    "(" ++ prettyPrintType left ++ ")" ++ " -> " ++ prettyPrintType right
+
+prettyPrintType (TFunction left right) =
+    prettyPrintType left ++ " -> " ++ prettyPrintType right
+
+instance Show Type where
+    show = prettyPrintType
 
 -- A funky function assigning size to a type
 
