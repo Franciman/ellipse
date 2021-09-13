@@ -1,14 +1,20 @@
+{-# LANGUAGE DeriveGeneric #-}
 module Type where
-
+    
 -- Types are a central feature of Ellipse.
 -- Let us start with a simply typed language with base types
+
+import GHC.Generics
+import Control.DeepSeq
 
 data Type = TBool
     | TString
     | TInt
     | TFloat
     | TFunction Type Type
-    deriving(Eq)
+    deriving(Eq, Generic)
+
+instance NFData Type
 
 prettyPrintType :: Type -> String
 prettyPrintType TBool = "Bool"

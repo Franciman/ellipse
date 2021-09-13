@@ -1,10 +1,14 @@
+{-# LANGUAGE DeriveGeneric #-}
 module CoreSyntaxTree where
-
+    
 import Type
 
 import qualified Data.Sequence as S
 
 import qualified Data.Text as T
+
+import GHC.Generics
+import Control.DeepSeq
 
 -- This is the AST of our Core language
 -- Simply typed lambda calculus, with a let expression and y combinator.
@@ -17,7 +21,9 @@ import qualified Data.Text as T
 
 -- We define some builtin operations for ease of use
 data BuiltinOp = Sum | Sub | Prod | Div | And | Or | Not | LessThan | GreaterThan | Equal
-    deriving(Show)
+    deriving(Show, Generic)
+
+instance NFData BuiltinOp
 
 data Expr = If Expr Expr Expr
            | BoolLit Bool
@@ -37,7 +43,9 @@ data Expr = If Expr Expr Expr
            -- ^ For abstractions we do the same, we keep the original name of the bound variables
            -- ^ Together with their types (necessary for typechecking)
            | App Expr (S.Seq Expr)
-           deriving(Show)
+           deriving(Show, Generic)
+
+instance NFData Expr
 
 -- A top level declaration
 data Decl = Decl T.Text Expr

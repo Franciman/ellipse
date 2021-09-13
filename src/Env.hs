@@ -1,8 +1,11 @@
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 module Env where
-
+    
 import qualified Data.Sequence as S
 
 import Data.Foldable (foldl')
+
+import Control.DeepSeq
 
 -- This module defines an environment useful for various
 -- operations like typechecking or evaluation.
@@ -11,11 +14,10 @@ import Data.Foldable (foldl')
 -- Since we use index-based representation of variables,
 -- the environment too uses index based accessing.
 
-
 newtype Env a = Env
     { unwrap :: S.Seq a
     }
-    deriving(Show)
+    deriving(Show, NFData)
 
 empty :: Env a
 empty = Env S.empty

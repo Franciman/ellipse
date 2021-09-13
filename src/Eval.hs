@@ -1,5 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
 module Eval where
-
+    
 import qualified CoreSyntaxTree as C
 import Type
 import qualified Env as E
@@ -8,6 +9,9 @@ import qualified Data.Text as T
 import qualified Data.Sequence as S
 
 import Data.Maybe (fromJust)
+import GHC.Generics
+
+import Control.DeepSeq
 
 -- We define an interpreter for our language directly on SyntaxTree terms.
 -- Since we allow definitions, how should we deal with them?
@@ -28,6 +32,9 @@ data Value = Closure Env Int C.Expr
     -- We keep a special closure type for builtin operators,
     -- to support currying we keep track of how many arguments we still need to apply before getting a value
     | Builtin Env Int C.BuiltinOp
+    deriving (Generic)
+
+instance NFData Value
 
 instance Show Value where
     show (Closure _ _ _) = "<closure>"
