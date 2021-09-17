@@ -31,12 +31,12 @@ The core language's grammar is given by
 | $t := x$
 |       $|\, \lambda x. t$
 |       $|\, t \, t$
-|       $|\, fix\, t$
+|       $|\, \textit{fix}\, t$
 
 Values are taken to be, observe that lambda functions are paired with an environment, they form the so called `closures`.
 
 | $v := (E, \lambda x. t)$
-|       $|\, fix\, v$
+|       $|\, \textit{fix}\, v$
 
 Observe that `fix v` is a value, this is a bit strange, because it is an infinite loop,
 but in order to define a big step semantics for call by value (more amenable to fast implementations),
@@ -61,7 +61,7 @@ When variables are in scope, we look up their value in the environment:
 When we encounter a `fix t`, we want to fully evaluate its argument, easy peasy:
 
 ```nat-ded
-(rule "fix-eval" "E \vdash t \Downarrow v" "E \vdash fix\, t \Downarrow fix\, v")
+(rule "fix-eval" "E \vdash t \Downarrow v" "E \vdash \text{fix}\, t \Downarrow \text{fix}\, v")
 ```
 
 Now let us define how beta-reduction works:
@@ -80,9 +80,9 @@ and see what happens.
 
 ```nat-ded
 (rule "recur"
-      "E \vdash t_1 \Downarrow fix\, (E', \lambda x. \lambda y. t)"
+      "E \vdash t_1 \Downarrow \text{fix}\, (E', \lambda x. \lambda y. t)"
       "E \vdash t_2 \Downarrow v_2"
-      "y = v_2, x = fix\, (E', \lambda x. t), E' \vdash t \Downarrow v"
+      "y = v_2, x = \text{fix}\, (E', \lambda x. t), E' \vdash t \Downarrow v"
       "E \vdash t_1\, t_2 \Downarrow v")
 ```
 

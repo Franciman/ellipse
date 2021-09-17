@@ -2,28 +2,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Text.Pandoc.JSON
-import System.IO
-import System.Posix.Temp
 import System.Process
-import System.Directory
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Control.Exception (bracket)
 
-test :: Block -> IO Block
-test cb@(CodeBlock (id, classes, namevals) contents) = do
+naturalDed :: Block -> IO Block
+naturalDed cb@(CodeBlock (id, classes, namevals) contents) = do
     case elem "nat-ded" classes of
         False -> return cb
         True -> do
-            let cleanup (name, handle) = hClose handle >> removeFile name
-            bracket (mkstemp "nat-ded.svg") cleanup $ \(name, handle) -> do
-                (name, handle) <- mkstemp "nat-ded.svg"
-                readProcess "natural-deduction" ["2", name] (T.unpack contents)
-                svg <- T.hGetContents handle
-                hClose handle >> removeFile name
-                return . RawBlock (Format "html") $ "<span class=\"math display\">" <> svg <> "</span>"
+            latex <- readProcess "natural-scheme" [] (T.unpack contents)
+            let latex' = "\\begin{prooftree}\n" <> latex <> "\n\\end{prooftree}"
+            return $ Plain [Math InlineMath (T.pack latex')]
 
-test b = return b
+naturalDed b = return b
 
 main :: IO ()
-main = toJSONFilter test
+main = toJSONFilter naturalDed

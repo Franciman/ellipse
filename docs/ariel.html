@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Ariel semantics</title>
+  <style>
+    html {
+      line-height: 1.5;
+      font-family: Georgia, serif;
+      font-size: 20px;
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      word-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 1em;
+      }
+    }
+    @media print {
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, 'Lucida Console', Consolas, monospace;
+      font-size: 85%;
+      margin: 0;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Ariel semantics</h1>
+</header>
+<p>We want to prove that Ariel with letrec behaves as we expect, i.e. it behaves as the same program encoded in a fix-based recursive language.</p>
+<p>To this end we define two languages, one called <code>Ariel-rec</code> and one called <code>Ariel-fix</code>.</p>
+<h2 id="environments">Environments</h2>
+<p>In both cases we need the notion of environment. Having a nameless representation, we want to be able to retrieve bindings by the index of the variable and we want the possibility of adding a new binding for the <code>0</code> variable, shifting all other indices.</p>
+<p>In the following <code>v</code> will represent a value of the language and <code>E</code> an environment.</p>
+<p>We have therefore three functions defined for working with environments:</p>
+<ul>
+<li><dl>
+<dt><span class="math inline">\(bind(v, E)\)</span></dt>
+<dd>adds a new binding for the <code>0</code> variable, shifting all the other indices.
+</dd>
+</dl></li>
+<li><dl>
+<dt><span class="math inline">\(contains(n, E)\)</span></dt>
+<dd>checks whether the environment contains a binding for the <code>n-th</code> variable
+</dd>
+</dl></li>
+<li><dl>
+<dt><span class="math inline">\(lookup(n, E)\)</span></dt>
+<dd>returns the binding associated to the n-th variable.
+</dd>
+</dl></li>
+</ul>
+<p>Finally, we use the symbol <span class="math inline">\(\emptyset\)</span> for representing an empty environment.</p>
+<h2 id="ariel-fix">Ariel-fix</h2>
+<p>We can describe <code>Ariel-fix</code> as a nameless lambda calculus with a <code>fix</code> operator. Nothing fancy, indeed.</p>
+<p>We can describe its terms as follows:</p>
+<div class="line-block"><span class="math inline">\(t := \textbf{n}\)</span><br />
+    <span class="math inline">\(| \lambda . t\)</span><br />
+    <span class="math inline">\(| \text{fix} t\)</span><br />
+    <span class="math inline">\(| t \, t\)</span></div>
+<p>Values are described even more easily:</p>
+<div class="line-block"><span class="math inline">\(v := \lambda \langle E \rangle. t\)</span><br />
+    <span class="math inline">\(| \text{fix} v\)</span></div>
+<p>The first case is a closure, i.e. a lambda abstraction packed with an environment <span class="math inline">\(E\)</span>.</p>
+<p>The second case represents a potential infinite loop :D</p>
+<p>Finally the semantics is easily described by the following set of rules:</p>
+<span class="math inline">\(\begin{prooftree}
+\AxiomC{}
+\RightLabel{\textit{lam}}
+\UnaryInfC{$E \vdash \lambda . t \Downarrow \lambda \langle E \rangle . t$}
+
+\end{prooftree}\)</span>
+<span class="math inline">\(\begin{prooftree}
+{\AxiomC{$E \vdash t \Downarrow v$}}\RightLabel{\textit{fix}}
+\UnaryInfC{$E \vdash \text{fix} t \Downarrow \text{fix} v$}
+
+\end{prooftree}\)</span>
+<span class="math inline">\(\begin{prooftree}
+{\AxiomC{$contains(n, E)$}}\RightLabel{\textit{var}}
+\UnaryInfC{$E \vdash n \Downarrow lookup(n, E)$}
+
+\end{prooftree}\)</span>
+<p>Beta reduction:</p>
+<span class="math inline">\(\begin{prooftree}
+{\AxiomC{$E \vdash t_1 \Downarrow \lambda \langle E&#39; \rangle . t$}}{\AxiomC{$E \vdash t_2 \Downarrow v_2$}}{\AxiomC{$bind(v_2, E&#39;) \vdash t \Downarrow v$}}\RightLabel{$\beta$}
+\TrinaryInfC{$E \vdash t_1 \, t_2 \Downarrow v$}
+
+\end{prooftree}\)</span>
+<p>Recursion:</p>
+<p>In order to make things easier to read we use the following abbreviation:</p>
+<p><span class="math display">\[\textbf{$v_1$} = \text{fix} (\lambda \langle E&#39; \rangle . \lambda . t)\]</span></p>
+<span class="math inline">\(\begin{prooftree}
+{\AxiomC{$E \vdash t_1 \Downarrow \textbf{$v_1$}$}}{\AxiomC{$E \vdash t_2 \Downarrow v_2$}}{\AxiomC{$bind(v_2, bind(\textbf{$v_1$}, E&#39;)) \vdash t \Downarrow v$}}\RightLabel{$\mu$}
+\TrinaryInfC{$E \vdash t_1 \, t_2 \Downarrow v$}
+
+\end{prooftree}\)</span>
+<h2 id="ariel-rec">Ariel-rec</h2>
+<p>Now we define what is a nameless lambda calculus with a <code>letrec</code> statement allowing recursion</p>
+<p>We can describe its terms as follows:</p>
+<div class="line-block"><span class="math inline">\(t := \textbf{n}\)</span><br />
+    <span class="math inline">\(| \text{rec} \, \textbf{n}\)</span><br />
+    <span class="math inline">\(| \lambda . t\)</span><br />
+    <span class="math inline">\(| \text{letrec}\, t\, \text{in}\, t\)</span><br />
+    <span class="math inline">\(| t \, t\)</span></div>
+<p>We have the letrect statement and a new type of variable, a <code>rec n</code> variable.</p>
+<p>This variable is used to refer to the recursive value introduced by the <code>n-th</code> enclosing letrec statement (including in the letrect declaration itself, that’s what makes it special!).</p>
+<p>Values are described even more easily:</p>
+<div class="line-block"><span class="math inline">\(v := \lambda \langle E \rangle. t\)</span></div>
+<p>We only have a closure, the news is that we have another environment for recursive variables, associating to each of them a <em>term</em> (not a <em>value</em>).</p>
+<span class="math inline">\(\begin{prooftree}
+\AxiomC{}
+\RightLabel{\textit{lam}}
+\UnaryInfC{$(E, R) \vdash \lambda . t \Downarrow \lambda \langle E \rangle . t$}
+
+\end{prooftree}\)</span>
+<span class="math inline">\(\begin{prooftree}
+{\AxiomC{$contains(n, E)$}}\RightLabel{\textit{var}}
+\UnaryInfC{$(E, R) \vdash n \Downarrow lookup(n, E)$}
+
+\end{prooftree}\)</span>
+<p>And now a news, evaluation of a recursive variable</p>
+<span class="math inline">\(\begin{prooftree}
+{\AxiomC{$contains(n, R)$}}{\AxiomC{$(E, R) \vdash lookup(n, R) \Downarrow v$}}\RightLabel{\textit{rec-var}}
+\BinaryInfC{$(E, R) \vdash \text{rec}\, n \Downarrow v$}
+
+\end{prooftree}\)</span>
+</body>
+</html>
