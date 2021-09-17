@@ -21,14 +21,14 @@ import Control.DeepSeq
 -- Let bindings are interpreted as if they were lambda functions applied to the new definition
 
 -- This is the result of the evaluation process
-data Value = Closure Env Int C.Expr
+data Value = Closure Env C.Expr
 -- Since we allow for multiple values to be bound, we keep track of how many vals we have already bound
     | IntLit Int
     | FloatLit Float
     | StringLit T.Text
     | BoolLit Bool
     -- Recursion closure, the first argument is always itself
-    | Recursion Env Int C.Expr
+    | Recursion Env C.Expr
     -- We keep a special closure type for builtin operators,
     -- to support currying we keep track of how many arguments we still need to apply before getting a value
     | Builtin Env Int C.BuiltinOp
@@ -37,12 +37,12 @@ data Value = Closure Env Int C.Expr
 instance NFData Value
 
 instance Show Value where
-    show (Closure _ _ _) = "<closure>"
+    show (Closure _ _) = "<closure>"
     show (IntLit n) = show n
     show (FloatLit n) = show n
     show (StringLit n) = show n
     show (BoolLit n) = show n
-    show (Recursion _ _ _) = "Recursion record"
+    show (Recursion _ _) = "Recursion record"
     show (Builtin _ _ op) = "<closure for builtin op " ++ show op ++ ">"
 
 type Env = E.Env Value
@@ -79,15 +79,15 @@ eval e b f@(C.Fix body) =
     -- a recursion value, which reminds us to keep looping,
     -- so what we do is bind the recursion value as the first argument
     -- of the evaulated body, so it can call itself.
-    let (Closure bodyB params body') = eval e b body
-    in Recursion bodyB params body'
+    let (Closure bodyB body') = eval e b body
+    in Recursion bodyB body'
 
 eval e b (C.FreeVar _ index) = fromJust (E.lookup index e)
 
 eval e b v@(C.BoundVar _ index) = fromJust (E.lookup index b)
 
 -- We create a closure with respect to the current bound variables environment
-eval e b (C.Abs params _ body) = Closure b (S.length params) body
+eval e b (C.Abs _  _ body) = Closure b body
 
 eval e b (C.BuiltinOp C.Not) = Builtin b 1 C.Not
 eval e b (C.BuiltinOp op) = Builtin b 2 op
@@ -100,33 +100,24 @@ eval e b (C.BuiltinOp op) = Builtin b 2 op
 --
 -- Now, with recursion, we have two possibilities, not only the closure one,
 -- but also
-eval e b (C.App f as) =
+eval e b (C.App f a) =
     case eval e b f of
-        (Closure bEnv' argsCount body) ->
-            let aVals = fmap (eval e b) as
-                newBoundEnv = E.bindMany aVals bEnv'
-            in if S.length aVals < argsCount
-               -- Let us check for partial application
-               -- If we applied too few arguments, we need to keep the closure
-               then Closure newBoundEnv (argsCount - S.length aVals) body
-               else eval e newBoundEnv body
+        (Closure bEnv' body) ->
+            let aVal = eval e b a
+                newBoundEnv = E.bind aVal bEnv'
+            in eval e newBoundEnv body
 
-        r@(Recursion bEnv' argsCount body) ->
-            let aVals = fmap (eval e b) as
-                newBoundEnv = E.bindMany aVals (E.bind r bEnv')
-            in if S.length aVals + 1 < argsCount
-               -- As before we check for a partial application,
-               -- remembering that the number of supplied arguments
-               -- must be increased by one, because we also supply a
-               -- continuation recursion.
-               then Closure newBoundEnv (argsCount - S.length aVals - 1) body
-               else eval e newBoundEnv body
+        r@(Recursion bEnv' body) ->
+            let newBoundEnv = E.bind r bEnv'
+                (Closure bEnv'' body') = eval e newBoundEnv body
+                aVal = eval e b a
+            in eval e (E.bind aVal bEnv'') body'
 
         (Builtin bEnv' argsLeft op) ->
-            let aVals = fmap (eval e b) as
-                newBoundEnv = E.bindMany aVals bEnv'
-            in if S.length aVals < argsLeft
-               then Builtin newBoundEnv (argsLeft - S.length aVals) op
+            let aVal = eval e b a
+                newBoundEnv = E.bind aVal bEnv'
+            in if argsLeft - 1 > 0
+               then Builtin newBoundEnv (argsLeft - 1) op
                else case op of
                    C.Sum -> runIntOp (+) newBoundEnv
                    C.Sub -> runIntOp (flip subtract) newBoundEnv
@@ -141,29 +132,34 @@ eval e b (C.App f as) =
 
         v -> error $ "Impossible: " ++ show v
 
+{-# INLINE runIntOp #-}
 runIntOp :: (Int -> Int -> Int) -> Env -> Value
 runIntOp op env =
     let (Just (IntLit n2)) = E.lookup 0 env
         (Just (IntLit n1)) = E.lookup 1 env
     in IntLit (op n1 n2)
 
+{-# INLINE runFloatOp #-}
 runFloatOp :: (Float -> Float -> Float) -> Env -> Value
 runFloatOp op env =
     let (Just (FloatLit n2)) = E.lookup 0 env
         (Just (FloatLit n1)) = E.lookup 1 env
     in FloatLit (op n1 n2)
 
+{-# INLINE runBoolOp #-}
 runBoolOp :: (Bool -> Bool -> Bool) -> Env -> Value
 runBoolOp op env =
     let (Just (BoolLit n2)) = E.lookup 0 env
         (Just (BoolLit n1)) = E.lookup 1 env
     in BoolLit (op n1 n2)
 
+{-# INLINE negateOp #-}
 negateOp :: Env -> Value
 negateOp env =
     let (Just (BoolLit n)) = E.lookup 0 env
     in BoolLit (not n)
 
+{-# INLINE runIntComp #-}
 runIntComp :: (Int -> Int -> Bool) -> Env -> Value
 runIntComp op env =
     let (Just (IntLit n2)) = E.lookup 0 env

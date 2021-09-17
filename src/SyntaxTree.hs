@@ -135,12 +135,11 @@ compileExpr env boundEnv (EVar name) =
 
 compileExpr env boundEnv (ELambda args body) =
     let argNames = map fst args
-        argTypes = map snd args
         newBoundEnv = addBindings argNames boundEnv
         compiledBody = compileExpr env newBoundEnv body
-    in Core.Abs (S.fromList argNames) (S.fromList argTypes) compiledBody
+    in foldr (\(name, ty) body -> Core.Abs name ty body) compiledBody args
 
 compileExpr env boundEnv (EApp f as) =
     let compiledF  = compileExpr env boundEnv f
         compiledAs = map (compileExpr env boundEnv) as
-    in Core.App compiledF (S.fromList compiledAs)
+    in foldl' Core.App compiledF compiledAs

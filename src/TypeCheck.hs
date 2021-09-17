@@ -68,15 +68,15 @@ typeCheck d b (C.BoundVar name index) =
           Right (E.lookup index b)
 
 
-typeCheck d b (C.Abs _ tys body) = do
-    let newBoundEnv = E.bindMany tys b
+typeCheck d b (C.Abs _ ty body) = do
+    let newBoundEnv = E.bind ty b
     codomainTy <- typeCheck d newBoundEnv body
-    return (curryFunction tys codomainTy)
+    return (TFunction ty codomainTy)
 
-typeCheck d b (C.App f as) = do
+typeCheck d b (C.App f a) = do
         fTy <- typeCheck d b f
-        asTy <- mapM (typeCheck d b) as
-        foldM partialApplyTypeCheck fTy asTy
+        aTy <- typeCheck d b a
+        partialApplyTypeCheck fTy aTy
 
     where partialApplyTypeCheck currTy aTy =
             case currTy of
