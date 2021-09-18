@@ -32,7 +32,7 @@ data Value = Closure Env C.Expr
     | StringLit T.Text
     | BoolLit Bool
     -- Recursion closure, the first argument is always itself
-    | Recursion (IORef (Maybe Value))
+    | Recursion Value
     -- We keep a special closure type for builtin operators,
     -- to support currying we keep track of how many arguments we still need to apply before getting a value
     | Builtin Env Int C.BuiltinOp
@@ -84,10 +84,8 @@ eval e b f@(C.Fix body) =
     -- so what we do is bind the recursion value as the first argument
     -- of the evaulated body, so it can call itself.
     let (Closure bodyB body') = eval e b body
-        recCell = unsafePerformIO (newIORef Nothing)
-        newBoundEnv = E.bind (Recursion recCell) bodyB
-        res = eval e newBoundEnv body'
-    in unsafePerformIO (modifyIORef' recCell (\_ -> Just res)) `seq` res
+        res = eval e (E.bind (Recursion res) bodyB) body'
+    in res
 
 eval e b (C.FreeVar _ index) = E.index index e
 
@@ -114,16 +112,10 @@ eval e b (C.App f a) =
                 newBoundEnv = E.bind aVal bEnv'
             in eval e newBoundEnv body
 
-        r@(Recursion recCell) ->
-            let recVal = unsafePerformIO (readIORef recCell)
-            in case recVal of
-                   Nothing -> error "Infinite Loop"
-                   Just (Closure bEnv' body) ->
-                       let aVal = eval e b a
-                           newBoundEnv = E.bind aVal bEnv'
-                       in eval e newBoundEnv body
-
-                   _ -> error "Impossible"
+        r@(Recursion (Closure bEnv' body)) ->
+            let aVal = eval e b a
+                newBoundEnv = E.bind aVal bEnv'
+            in eval e newBoundEnv body
 
         (Builtin bEnv' argsLeft op) ->
             let aVal = eval e b a
