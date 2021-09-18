@@ -12,6 +12,10 @@ import Data.Maybe (fromJust)
 import GHC.Generics
 
 import Control.DeepSeq
+import GHC.Exts
+import Data.IORef
+import System.IO.Unsafe
+import Debug.Trace
 
 -- We define an interpreter for our language directly on SyntaxTree terms.
 -- Since we allow definitions, how should we deal with them?
@@ -28,7 +32,7 @@ data Value = Closure Env C.Expr
     | StringLit T.Text
     | BoolLit Bool
     -- Recursion closure, the first argument is always itself
-    | Recursion Env C.Expr
+    | Recursion (IORef (Maybe Value))
     -- We keep a special closure type for builtin operators,
     -- to support currying we keep track of how many arguments we still need to apply before getting a value
     | Builtin Env Int C.BuiltinOp
@@ -42,7 +46,7 @@ instance Show Value where
     show (FloatLit n) = show n
     show (StringLit n) = show n
     show (BoolLit n) = show n
-    show (Recursion _ _) = "Recursion record"
+    show (Recursion _) = "Recursion record"
     show (Builtin _ _ op) = "<closure for builtin op " ++ show op ++ ">"
 
 type Env = E.Env Value
@@ -80,11 +84,14 @@ eval e b f@(C.Fix body) =
     -- so what we do is bind the recursion value as the first argument
     -- of the evaulated body, so it can call itself.
     let (Closure bodyB body') = eval e b body
-    in Recursion bodyB body'
+        recCell = unsafePerformIO (newIORef Nothing)
+        newBoundEnv = E.bind (Recursion recCell) bodyB
+        res = eval e newBoundEnv body'
+    in unsafePerformIO (modifyIORef' recCell (\_ -> Just res)) `seq` res
 
-eval e b (C.FreeVar _ index) = fromJust (E.lookup index e)
+eval e b (C.FreeVar _ index) = E.index index e
 
-eval e b v@(C.BoundVar _ index) = fromJust (E.lookup index b)
+eval e b v@(C.BoundVar _ index) = E.index index b
 
 -- We create a closure with respect to the current bound variables environment
 eval e b (C.Abs _  _ body) = Closure b body
@@ -107,11 +114,16 @@ eval e b (C.App f a) =
                 newBoundEnv = E.bind aVal bEnv'
             in eval e newBoundEnv body
 
-        r@(Recursion bEnv' body) ->
-            let newBoundEnv = E.bind r bEnv'
-                (Closure bEnv'' body') = eval e newBoundEnv body
-                aVal = eval e b a
-            in eval e (E.bind aVal bEnv'') body'
+        r@(Recursion recCell) ->
+            let recVal = unsafePerformIO (readIORef recCell)
+            in case recVal of
+                   Nothing -> error "Infinite Loop"
+                   Just (Closure bEnv' body) ->
+                       let aVal = eval e b a
+                           newBoundEnv = E.bind aVal bEnv'
+                       in eval e newBoundEnv body
+
+                   _ -> error "Impossible"
 
         (Builtin bEnv' argsLeft op) ->
             let aVal = eval e b a
@@ -119,54 +131,93 @@ eval e b (C.App f a) =
             in if argsLeft - 1 > 0
                then Builtin newBoundEnv (argsLeft - 1) op
                else case op of
-                   C.Sum -> runIntOp (+) newBoundEnv
-                   C.Sub -> runIntOp (flip subtract) newBoundEnv
-                   C.Prod -> runIntOp (*) newBoundEnv
-                   C.Div -> runFloatOp (/) newBoundEnv
-                   C.And -> runBoolOp (&&) newBoundEnv
-                   C.Or -> runBoolOp (||) newBoundEnv
-                   C.Not -> negateOp newBoundEnv
-                   C.LessThan -> runIntComp (<) newBoundEnv
-                   C.GreaterThan -> runIntComp (>) newBoundEnv
-                   C.Equal -> runIntComp (==) newBoundEnv
+                   C.Sum ->
+                       let (IntLit n2) = E.index 0 newBoundEnv
+                           (IntLit n1) = E.index 1 newBoundEnv
+                       in IntLit (n1 + n2)
+
+                   C.Sub ->
+                       let (IntLit n2) = E.index 0 newBoundEnv
+                           (IntLit n1) = E.index 1 newBoundEnv
+                       in IntLit (n1 - n2)
+
+                   C.Prod ->
+                       let (IntLit n2) = E.index 0 newBoundEnv
+                           (IntLit n1) = E.index 1 newBoundEnv
+                       in IntLit (n1 * n2)
+
+                   C.Div -> 
+                       let (FloatLit n2) = E.index 0 newBoundEnv
+                           (FloatLit n1) = E.index 1 newBoundEnv
+                       in FloatLit (n1 / n2)
+
+                   C.And -> 
+                       let (BoolLit n2) = E.index 0 newBoundEnv
+                           (BoolLit n1) = E.index 1 newBoundEnv
+                       in BoolLit (n1 && n2)
+
+                   C.Or -> 
+                       let (BoolLit n2) = E.index 0 newBoundEnv
+                           (BoolLit n1) = E.index 1 newBoundEnv
+                       in BoolLit (n1 || n2)
+
+                   C.Not ->
+                       let (BoolLit n1) = E.index 0 newBoundEnv
+                       in BoolLit (not n1)
+
+                   C.LessThan ->
+                       let (IntLit n2) = E.index 0 newBoundEnv
+                           (IntLit n1) = E.index 1 newBoundEnv
+                       in BoolLit (n1 < n2)
+
+                   C.GreaterThan ->
+                       let (IntLit n2) = E.index 0 newBoundEnv
+                           (IntLit n1) = E.index 1 newBoundEnv
+                       in BoolLit (n1 > n2)
+
+                   C.Equal ->
+                       let (IntLit n2) = E.index 0 newBoundEnv
+                           (IntLit n1) = E.index 1 newBoundEnv
+                       in BoolLit (n1 == n2)
+
 
         v -> error $ "Impossible: " ++ show v
 
-{-# INLINE runIntOp #-}
+{-{-# INLINE runIntOp #-}
 runIntOp :: (Int -> Int -> Int) -> Env -> Value
 runIntOp op env =
-    let (Just (IntLit n2)) = E.lookup 0 env
-        (Just (IntLit n1)) = E.lookup 1 env
+    let (IntLit n2) = E.index 0 env
+        (IntLit n1) = E.index 1 env
     in IntLit (op n1 n2)
 
 {-# INLINE runFloatOp #-}
 runFloatOp :: (Float -> Float -> Float) -> Env -> Value
 runFloatOp op env =
-    let (Just (FloatLit n2)) = E.lookup 0 env
-        (Just (FloatLit n1)) = E.lookup 1 env
+    let (FloatLit n2) = E.index 0 env
+        (FloatLit n1) = E.index 1 env
     in FloatLit (op n1 n2)
 
 {-# INLINE runBoolOp #-}
 runBoolOp :: (Bool -> Bool -> Bool) -> Env -> Value
 runBoolOp op env =
-    let (Just (BoolLit n2)) = E.lookup 0 env
-        (Just (BoolLit n1)) = E.lookup 1 env
+    let (BoolLit n2) = E.index 0 env
+        (BoolLit n1) = E.index 1 env
     in BoolLit (op n1 n2)
 
 {-# INLINE negateOp #-}
 negateOp :: Env -> Value
 negateOp env =
-    let (Just (BoolLit n)) = E.lookup 0 env
+    let (BoolLit n) = E.index 0 env
     in BoolLit (not n)
 
 {-# INLINE runIntComp #-}
 runIntComp :: (Int -> Int -> Bool) -> Env -> Value
 runIntComp op env =
-    let (Just (IntLit n2)) = E.lookup 0 env
-        (Just (IntLit n1)) = E.lookup 1 env
+    let (IntLit n2) = E.index 0 env
+        (IntLit n1) = E.index 1 env
     in BoolLit (op n1 n2)
 
-
+-}
 -- Entry point for evaluation
 -- Now if the result of evaluation is a Recursion record,
 -- it means we are looping forever

@@ -1,5 +1,5 @@
 module SyntaxTree where
-
+    
 import qualified Data.Text as T
 import qualified CoreSyntaxTree as Core
 import qualified Data.Map.Strict as M
@@ -9,6 +9,7 @@ import qualified Env as E
 
 import Data.Foldable (foldl')
 import Control.Arrow (first)
+import GHC.Exts
 
 import Type
 

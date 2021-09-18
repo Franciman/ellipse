@@ -1,9 +1,11 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 module Env where
     
 import qualified Data.Sequence as S
 
 import Data.Foldable (foldl')
+import Data.Maybe (fromJust)
 
 import Control.DeepSeq
 
@@ -24,13 +26,21 @@ empty = Env S.empty
 
 -- We only support adding a new binding for the 0 variable (and shifting all the other indices),
 -- this makes the implementation easier to be correct.
+{-# INLINE bind #-}
 bind :: a -> Env a -> Env a
 bind info (Env s) = Env $ info S.<| s
 
 -- Bind many variables, from left to right
+{-# INLINE bindMany #-}
 bindMany :: Foldable t => t a -> Env a -> Env a
 bindMany xs e = foldl' (flip bind) e xs
 
 -- Lookup info associated to the given variable, if any
+{-# INLINE lookup #-}
 lookup :: Int -> Env a -> Maybe a
 lookup idx (Env s) = S.lookup idx s
+
+-- Unsafe lookup
+{-# INLINE index #-}
+index :: Int -> Env a -> a
+index idx = fromJust . Env.lookup idx

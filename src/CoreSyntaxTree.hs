@@ -8,6 +8,7 @@ import qualified Data.Text as T
 import GHC.Generics
 import Control.DeepSeq
 
+
 -- This is the AST of our Core language
 -- Simply typed lambda calculus, with a let expression and y combinator.
 -- and top level definitions

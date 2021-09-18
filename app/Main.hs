@@ -33,5 +33,5 @@ main :: IO ()
 main = do
     let filename = "./example.ll"
     input <- T.readFile filename
-    runBenchmarks input
+    runInterpreter input
 

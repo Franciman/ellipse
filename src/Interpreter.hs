@@ -68,9 +68,5 @@ runInterpreter input = do
                     -- there is no duplication, so we can convert our program
                     -- to a core representation
                     let coreDefs = compile defs
-                    error <- typeCheckProgram E.empty coreDefs
-                    case error of
-                        Just err -> putStrLn $ "TypeCheck error: " ++ err
-                        Nothing -> do
-                            res <- evalProgram E.empty coreDefs
-                            print res
+                    res <- evalProgram E.empty coreDefs
+                    print res
