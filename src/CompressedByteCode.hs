@@ -61,6 +61,12 @@ data Value = IntLit Int#
 -- builtin LessThan    -> 14
 -- builtin GreaterThan -> 15
 -- builtin Equal       -> 16
+--
+-- WARNING:
+-- Some instructions also have parameters, they are put after the operator bytecode encoded as word64 little endian
+-- So for example: const 1 is encoded as: 01000000000000000000000000000000000000000000...
+
+-- Externally we have to use Ints, because that's what we can use as index of the bytestring, sad.
 
 -- Addresses are represented as Ints, because that's what haskell allows to access ByteString
 type Counter s= STRef s Int
