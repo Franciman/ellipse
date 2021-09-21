@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 module Env where
     
@@ -26,7 +25,6 @@ empty = Env S.empty
 
 -- We only support adding a new binding for the 0 variable (and shifting all the other indices),
 -- this makes the implementation easier to be correct.
-{-# INLINE bind #-}
 bind :: a -> Env a -> Env a
 bind info (Env s) = Env $ info S.<| s
 

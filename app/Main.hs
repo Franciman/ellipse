@@ -5,12 +5,14 @@ import System.Environment (getArgs)
 import Data.Time.Clock
 import Control.DeepSeq
 
+import qualified CoreSyntaxTree as C
 import Interpreter
 import qualified Env as E
 import qualified Data.Text as T
 import Parser
 import SyntaxTree
 import Criterion.Main
+import ByteCode
 
 
 runBenchmarks :: T.Text -> IO ()
@@ -27,8 +29,10 @@ runBenchmarks input = do
                     let coreDefs = compile defs
                     defaultMain
                        [ bench "TypeCheck" $ nfIO $ typeCheckProgram E.empty coreDefs
-                       , bench "Eval"      $ nfIO $ evalProgram E.empty coreDefs
+                       , bench "Eval"      $ nfIO $ evalProgram emptyStack E.empty coreDefs
                        ]
+
+
 main :: IO ()
 main = do
     let filename = "./example.ll"

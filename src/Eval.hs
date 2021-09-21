@@ -32,7 +32,7 @@ data Value = Closure Env C.Expr
     | StringLit T.Text
     | BoolLit Bool
     -- Recursion closure, the first argument is always itself
-    | Recursion Value
+    -- | Recursion Value
     -- We keep a special closure type for builtin operators,
     -- to support currying we keep track of how many arguments we still need to apply before getting a value
     | Builtin Env Int C.BuiltinOp
@@ -46,7 +46,7 @@ instance Show Value where
     show (FloatLit n) = show n
     show (StringLit n) = show n
     show (BoolLit n) = show n
-    show (Recursion _) = "Recursion record"
+    -- show (Recursion _) = "Recursion record"
     show (Builtin _ _ op) = "<closure for builtin op " ++ show op ++ ">"
 
 type Env = E.Env Value
@@ -84,7 +84,7 @@ eval e b f@(C.Fix body) =
     -- so what we do is bind the recursion value as the first argument
     -- of the evaulated body, so it can call itself.
     let (Closure bodyB body') = eval e b body
-        res = eval e (E.bind (Recursion res) bodyB) body'
+        res = eval e (E.bind res bodyB) body'
     in res
 
 eval e b (C.FreeVar _ index) = E.index index e
@@ -108,11 +108,6 @@ eval e b (C.BuiltinOp op) = Builtin b 2 op
 eval e b (C.App f a) =
     case eval e b f of
         (Closure bEnv' body) ->
-            let aVal = eval e b a
-                newBoundEnv = E.bind aVal bEnv'
-            in eval e newBoundEnv body
-
-        r@(Recursion (Closure bEnv' body)) ->
             let aVal = eval e b a
                 newBoundEnv = E.bind aVal bEnv'
             in eval e newBoundEnv body

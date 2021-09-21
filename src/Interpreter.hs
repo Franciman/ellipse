@@ -7,7 +7,8 @@ module Interpreter where
 
 import Parser
 import SyntaxTree
-import Eval
+-- import Eval
+import ByteCode
 import Type
 import TypeCheck
 import Control.Monad (forM)
@@ -16,6 +17,8 @@ import qualified CoreSyntaxTree as Core
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Env as E
+
+import Control.DeepSeq
 
 -- Find if there is any duplicate, and report the first one found
 -- it runs in O(n*logn) worst case time.
@@ -47,13 +50,15 @@ typeCheckProgram env (Core.Decl name body:ds) = do
 -- previous ones, it is guaranteed that each definition can be
 -- full computed, if we proceed in order.
 -- Each time a definition is computed, it is added to the evaluator's envtype Env = E.Env Value
-evalProgram :: Env -> [Core.Decl] -> IO Value
-evalProgram _ [] = return $ BoolLit False -- If there is no main, return a dummy value
-evalProgram env (Core.Decl name body:ds) = do
-    let val = runEval env body
+evalProgram :: Stack -> Env -> [Core.Decl] -> IO Value
+evalProgram _ _ [] = return $ BoolLit False -- If there is no main, return a dummy value
+evalProgram stack env (Core.Decl name body:ds) = do
+    putStrLn $ "Evaluating: " ++ show name
+    let (stack',val) = runEval stack env body
+    putStrLn $ "Finished Evaluating: " ++ show name
     if name == "main"
     then return val
-    else evalProgram (E.bind val env) ds
+    else evalProgram stack' (E.bind val env) ds
 
 
 runInterpreter :: T.Text -> IO ()
@@ -68,5 +73,5 @@ runInterpreter input = do
                     -- there is no duplication, so we can convert our program
                     -- to a core representation
                     let coreDefs = compile defs
-                    res <- evalProgram E.empty coreDefs
+                    res <- evalProgram emptyStack E.empty coreDefs
                     print res

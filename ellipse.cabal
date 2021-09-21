@@ -20,7 +20,7 @@ category:           Language
 extra-source-files: CHANGELOG.md
 
 library
-    exposed-modules:  Interpreter, SyntaxTree, CoreSyntaxTree, Type, TypeCheck, Eval, Env, UnTypedCalculus, Parser, Repl
+    exposed-modules:  Interpreter, SyntaxTree, CoreSyntaxTree, Type, TypeCheck, Eval, Env, UnTypedCalculus, Parser, Repl, ByteCode, CompressedByteCode
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -28,9 +28,10 @@ library
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
     default-extensions: StrictData
-    build-depends:    base ^>=4.14.2.0, containers, text, megaparsec, parser-combinators, deepseq
+    build-depends:    base ^>=4.14.2.0, bytestring, cereal, containers, text, megaparsec, parser-combinators, deepseq
     hs-source-dirs:   src
     default-language: Haskell2010
+    ghc-options: -Wall
 
 executable ellipse
     main-is:          Main.hs
@@ -45,12 +46,14 @@ executable ellipse
         base ^>=4.14.2.0,
         text,
         time,
+        transformers,
         deepseq,
         criterion,
         ellipse
 
     hs-source-dirs:   app
     default-language: Haskell2010
+    ghc-options: -Wall
 
 test-suite ellipse-test
     default-language: Haskell2010
