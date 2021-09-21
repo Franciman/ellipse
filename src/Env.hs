@@ -5,7 +5,7 @@ import qualified Data.Sequence as S
 
 import Data.Foldable (foldl')
 import Data.Maybe (fromJust)
-
+import Debug.Trace
 import Control.DeepSeq
 
 -- This module defines an environment useful for various

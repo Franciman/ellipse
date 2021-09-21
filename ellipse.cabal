@@ -28,7 +28,7 @@ library
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
     default-extensions: StrictData
-    build-depends:    base ^>=4.14.2.0, bytestring, cereal, containers, text, megaparsec, parser-combinators, deepseq
+    build-depends:    base ^>=4.14.2.0, bytestring, cereal, containers, text, megaparsec, parser-combinators, deepseq, vector
     hs-source-dirs:   src
     default-language: Haskell2010
     ghc-options: -Wall

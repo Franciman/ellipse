@@ -12,7 +12,7 @@ import qualified Data.Text as T
 import Parser
 import SyntaxTree
 import Criterion.Main
-import ByteCode
+import CompressedByteCode
 
 
 runBenchmarks :: T.Text -> IO ()
@@ -29,7 +29,7 @@ runBenchmarks input = do
                     let coreDefs = compile defs
                     defaultMain
                        [ bench "TypeCheck" $ nfIO $ typeCheckProgram E.empty coreDefs
-                       , bench "Eval"      $ nfIO $ evalProgram emptyStack E.empty coreDefs
+                       -- , bench "Eval"      $ nfIO $ evalProgram emptyStack E.empty coreDefs
                        ]
 
 

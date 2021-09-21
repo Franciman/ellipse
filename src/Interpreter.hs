@@ -7,8 +7,9 @@ module Interpreter where
 
 import Parser
 import SyntaxTree
--- import Eval
-import ByteCode
+import qualified Eval
+-- import qualified ByteCode as CB
+import qualified CompressedByteCode as CB
 import Type
 import TypeCheck
 import Control.Monad (forM)
@@ -50,16 +51,30 @@ typeCheckProgram env (Core.Decl name body:ds) = do
 -- previous ones, it is guaranteed that each definition can be
 -- full computed, if we proceed in order.
 -- Each time a definition is computed, it is added to the evaluator's envtype Env = E.Env Value
-evalProgram :: Stack -> Env -> [Core.Decl] -> IO Value
-evalProgram _ _ [] = return $ BoolLit False -- If there is no main, return a dummy value
-evalProgram stack env (Core.Decl name body:ds) = do
+evalProgramCB' :: CB.Stack -> CB.Env -> [Core.Decl] -> IO CB.Value
+evalProgramCB' _ _ [] = return $ CB.BoolLit False -- If there is no main, return a dummy value
+evalProgramCB' stack env (Core.Decl name body:ds) = do
     putStrLn $ "Evaluating: " ++ show name
-    let (stack',val) = runEval stack env body
+    -- runDumper stack env body
+    let (stack',val) = CB.runEval stack env body
     putStrLn $ "Finished Evaluating: " ++ show name
     if name == "main"
     then return val
-    else evalProgram stack' (E.bind val env) ds
+    else evalProgramCB' stack' (E.bind val env) ds
 
+evalProgramCB :: CB.Env -> [Core.Decl] -> IO CB.Value
+evalProgramCB = evalProgramCB' CB.emptyStack
+
+
+evalProgramE :: Eval.Env -> [Core.Decl] -> IO Eval.Value
+evalProgramE _ [] = return $ Eval.BoolLit False -- If there is no main, return a dummy value
+evalProgramE env (Core.Decl name body:ds) = do
+    putStrLn $ "Evaluating: " ++ show name
+    let val = Eval.runEval env body
+    putStrLn $ "Finished Evaluating: " ++ show name
+    if name == "main"
+    then return val
+    else evalProgramE (E.bind val env) ds
 
 runInterpreter :: T.Text -> IO ()
 runInterpreter input = do
@@ -73,5 +88,5 @@ runInterpreter input = do
                     -- there is no duplication, so we can convert our program
                     -- to a core representation
                     let coreDefs = compile defs
-                    res <- evalProgram emptyStack E.empty coreDefs
+                    res <- evalProgramCB E.empty coreDefs
                     print res
