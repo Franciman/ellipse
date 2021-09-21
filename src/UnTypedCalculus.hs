@@ -30,21 +30,21 @@ data Value = Closure Env Int Term
 -- and it is guaranteed to be bound by the environment in the correct position, by construction.
 
 eval :: Env -> Env -> Term -> Value
-eval defs env (BoundVar idx) =
+eval _ env (BoundVar idx) =
     case S.lookup idx env of
         Nothing -> error "Unbound variable"
         Just v  -> v
 
-eval defs env (FreeVar idx) =
+eval defs _ (FreeVar idx) =
     case S.lookup idx defs of
         Nothing -> error "Unbound variable"
         Just v  -> v
 
-eval defs env (Abs argCount body) = Closure env argCount body
+eval _ env (Abs argCount body) = Closure env argCount body
 
-eval defs env (App f gs) =
+eval defs env (App f args) =
         let fval = eval defs env f
-        in evalApp fval gs
+        in evalApp fval args
 
     where evalApp (Closure env' argCount body) gs =
             case compare argCount (S.length gs) of

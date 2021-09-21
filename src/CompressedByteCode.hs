@@ -1,9 +1,7 @@
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveGeneric #-}
 module CompressedByteCode where
 
-import Debug.Trace
 import qualified CoreSyntaxTree as C
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
@@ -15,8 +13,8 @@ import Data.Word
 import Data.Bits
 import qualified Env as E
 import qualified Data.Text as T
-import GHC.Exts
 import qualified Data.Sequence as S
+import Data.Foldable
 import Control.DeepSeq
 import GHC.Generics
 import qualified Data.Vector as V
@@ -33,15 +31,15 @@ emptyStack = S.empty
 
 type Env = E.Env Value
 
-data Value = IntLit Int#
+data Value = IntLit Int
     | BoolLit Bool
-    | FloatLit Float#
+    | FloatLit Float
     | StringLit T.Text
     | Closure Env B.ByteString
     | BuiltinClosure Env Int Word8
     deriving (Show, Generic)
 
--- instance NFData Value
+instance NFData Value
 
 -- Now we define the 8 bytecodes for our instructions
 -- const -> 0
@@ -149,27 +147,26 @@ makeBuiltinClosure :: Env -> Word8 -> Value
 makeBuiltinClosure env 13 = BuiltinClosure env 1 13
 makeBuiltinClosure env opCode = BuiltinClosure env 2 opCode
 
-{-# INLINE evalOp #-}
 evalOp :: Env -> Word8 -> Value
 evalOp env 7 =
     let !(IntLit n2) = E.index 0 env
         !(IntLit n1) = E.index 1 env
-    in IntLit (n1 +# n2)
+    in IntLit (n1 + n2)
 
 evalOp env 8 =
     let !(IntLit n2) = E.index 0 env
         !(IntLit n1) = E.index 1 env
-    in IntLit (n1 -# n2)
+    in IntLit (n1 - n2)
 
 evalOp env 9 =
     let !(IntLit n2) = E.index 0 env
         !(IntLit n1) = E.index 1 env
-    in IntLit (n1 *# n2)
+    in IntLit (n1 * n2)
 
 evalOp env 10 =
     let !(FloatLit n2) = E.index 0 env
         !(FloatLit n1) = E.index 1 env
-    in FloatLit (divideFloat# n1 n2)
+    in FloatLit (n1 / n2)
 
 evalOp env 11 =
     let !(BoolLit n2) = E.index 0 env
@@ -188,19 +185,19 @@ evalOp env 13 =
 evalOp env 14 =
     let !(IntLit n2) = E.index 0 env
         !(IntLit n1) = E.index 1 env
-    in BoolLit (isTrue# (n1 <# n2))
+    in BoolLit (n1 < n2)
 
 evalOp env 15 =
     let !(IntLit n2) = E.index 0 env
         !(IntLit n1) = E.index 1 env
-    in BoolLit (isTrue# (n1 ># n2))
+    in BoolLit (n1 > n2)
 
 evalOp env 16 =
     let !(IntLit n2) = E.index 0 env
         !(IntLit n1) = E.index 1 env
-    in BoolLit (isTrue# (n1 ==# n2))
+    in BoolLit (n1 == n2)
 
-evalOp env _ = error "Impossible"
+evalOp _ _ = error "Impossible"
 
 runProgram :: Consts -> Env -> Env -> B.ByteString -> Counter s -> ST s Value
 runProgram s e b prog c = do
@@ -209,27 +206,27 @@ runProgram s e b prog c = do
 
 eval :: Word8 -> Consts -> Env -> Env -> B.ByteString -> Counter s-> ST s Value
 -- Const
-eval 0 s e b prog c = do
+eval 0 s _ _ prog c = do
     next c
     idx <- readAddress prog c
     return (V.unsafeIndex s idx)
 
 -- BoundLookup
-eval 1 s e b prog c = do
+eval 1 _ _ b prog c = do
     next c
     idx <- readAddress prog c
     -- traceM $ "BoundLookup: " ++ show idx
     return (E.index idx b)
 
 -- FreeLookup
-eval 2 s e b prog c = do
+eval 2 _ e _ prog c = do
     next c
     idx <- readAddress prog c
     -- traceM $ "FreeLookup: " ++ show idx
     return (E.index idx e)
 
 -- Abs
-eval 3 s e b prog c = do
+eval 3 s _ b prog c = do
     next c
     idx <- readAddress prog c
     let Closure _ body = V.unsafeIndex s idx
@@ -244,8 +241,11 @@ eval 4 s e b prog c = do
     case fVal of
         Closure bEnv' body -> do
             let newBoundEnv = E.bind aVal bEnv'
-            newCounter <- newSTRef 0
-            runProgram s e newBoundEnv body newCounter
+            oldCounter <- readSTRef c
+            writeSTRef c 0
+            res <- runProgram s e newBoundEnv body c
+            writeSTRef c oldCounter
+            return res
 
         BuiltinClosure bEnv' argsLeft op -> do
             let newBoundEnv = E.bind aVal bEnv'
@@ -259,8 +259,11 @@ eval 4 s e b prog c = do
 eval 5 s e b prog c = do
     next c
     Closure bEnv' body <- runProgram s e b prog c
-    newCounter <- newSTRef 0
-    fixST $ \res -> runProgram s e (E.bind res bEnv') body newCounter
+    oldCounter <- readSTRef c
+    writeSTRef c 0
+    v <- fixST $ \res -> runProgram s e (E.bind res bEnv') body c
+    writeSTRef c oldCounter
+    return v
 
 -- If
 eval 6 s e b prog c = do
@@ -294,13 +297,13 @@ compileAST (C.BoolLit b) stack = do
     modifySTRef' stack (push (BoolLit b))
     return $ writeConst idx
 
-compileAST (C.IntLit (I# b)) stack = do
+compileAST (C.IntLit b) stack = do
     idx <- S.length <$> readSTRef stack
     modifySTRef' stack (push (IntLit b))
     return $ writeConst idx
 
 
-compileAST (C.FloatLit (F# b)) stack = do
+compileAST (C.FloatLit b) stack = do
     idx <- S.length <$> readSTRef stack
     modifySTRef' stack (push (FloatLit b))
     return $ writeConst idx

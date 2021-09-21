@@ -10,16 +10,13 @@ import SyntaxTree
 import qualified Eval
 -- import qualified ByteCode as CB
 import qualified CompressedByteCode as CB
-import Type
 import TypeCheck
-import Control.Monad (forM)
 import qualified CoreSyntaxTree as Core
 
 import qualified Data.Text as T
 import qualified Data.Set as S
 import qualified Env as E
 
-import Control.DeepSeq
 
 -- Find if there is any duplicate, and report the first one found
 -- it runs in O(n*logn) worst case time.
@@ -54,10 +51,10 @@ typeCheckProgram env (Core.Decl name body:ds) = do
 evalProgramCB' :: CB.Stack -> CB.Env -> [Core.Decl] -> IO CB.Value
 evalProgramCB' _ _ [] = return $ CB.BoolLit False -- If there is no main, return a dummy value
 evalProgramCB' stack env (Core.Decl name body:ds) = do
-    putStrLn $ "Evaluating: " ++ show name
+    -- putStrLn $ "Evaluating: " ++ show name
     -- runDumper stack env body
     let (stack',val) = CB.runEval stack env body
-    putStrLn $ "Finished Evaluating: " ++ show name
+    -- putStrLn $ "Finished Evaluating: " ++ show name
     if name == "main"
     then return val
     else evalProgramCB' stack' (E.bind val env) ds
@@ -69,9 +66,9 @@ evalProgramCB = evalProgramCB' CB.emptyStack
 evalProgramE :: Eval.Env -> [Core.Decl] -> IO Eval.Value
 evalProgramE _ [] = return $ Eval.BoolLit False -- If there is no main, return a dummy value
 evalProgramE env (Core.Decl name body:ds) = do
-    putStrLn $ "Evaluating: " ++ show name
+    -- putStrLn $ "Evaluating: " ++ show name
     let val = Eval.runEval env body
-    putStrLn $ "Finished Evaluating: " ++ show name
+    -- putStrLn $ "Finished Evaluating: " ++ show name
     if name == "main"
     then return val
     else evalProgramE (E.bind val env) ds

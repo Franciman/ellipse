@@ -5,4 +5,4 @@ cond {
 }
 }
 
-def main = sum 10000000
+def main = sum 100000

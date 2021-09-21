@@ -24,11 +24,6 @@ type Env = E.Env Value
 push :: Value -> Stack -> Stack
 push v stack = stack S.|> v
 
-pop :: Stack -> (Value, Stack)
-pop s = case S.viewl s of
-    head S.:< tail -> (head, tail)
-    _ -> error "Empty stack"
-
 data Value = IntLit Int
      | BoolLit Bool
      | FloatLit Float
@@ -145,11 +140,11 @@ runProgram s e b prog = do
     eval s e b instr prog
 
 eval :: Stack -> Env -> Env -> ByteCode -> STRef s ProgState -> ST s Value
-eval s e b (Const idx) prog  = return $ S.index s idx
-eval s e b (BoundLookup idx) prog  = return $ E.index idx b
-eval s e b (FreeLookup idx) prog  = return $ E.index idx e
-eval s e b (Builtin op) prog  =  return $ makeBuiltinClosure b op
-eval s e b (Abs idx) prog  = do
+eval s _ _ (Const idx) _  = return $ S.index s idx
+eval _ _ b (BoundLookup idx) _ = return $ E.index idx b
+eval _ e _ (FreeLookup idx) _  = return $ E.index idx e
+eval _ _ b (Builtin op) _   =  return $ makeBuiltinClosure b op
+eval s _ b (Abs idx) _ = do
      let Closure _ body = S.index s idx
      return $ Closure b body
 
@@ -254,8 +249,8 @@ compileAST (C.Let name def body) stack = compileAST (C.App (C.Abs name undefined
 runEval :: Stack -> Env -> C.Expr -> (Stack, Value)
 runEval stack env expr = runST $ do
     stackRef <- newSTRef stack
-    program <- compileAST expr stackRef
+    compiledProgram <- compileAST expr stackRef
     stack' <- readSTRef stackRef
-    progState <- newSTRef $ ProgState program 0
+    progState <- newSTRef $ ProgState compiledProgram 0
     v <- runProgram stack' env E.empty progState
     return (stack', v)

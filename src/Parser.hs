@@ -93,8 +93,8 @@ reservedKeywords =
 
 identifier :: Parser T.Text
 identifier = lexeme $ do
-    let init = letterChar <|> char '_'
-    firstChar <- init
+    let initial = letterChar <|> char '_'
+    firstChar <- initial
     rest <- many alphaNumChar
     let name = T.pack (firstChar : rest)
     if name `elem` reservedKeywords
@@ -120,45 +120,45 @@ block = between (symbol "{") (symbol "}")
 
 cond :: Parser Expr
 cond = do
-        symbol "cond"
+        _ <- symbol "cond"
         block $ do
             clauses <- manyTill clause (symbol "else")
-            symbol "~>"
+            _ <- symbol "~>"
             elseClause <- block expr
             return $ ECond clauses elseClause
     where
         clause = do
-            cond <- expr
-            symbol "~>"
+            condition <- expr
+            _ <- symbol "~>"
             body <- block expr
-            return (cond, body)
+            return (condition, body)
 
 letParser :: Parser Expr
 letParser = do
-    symbol "let"
+    _ <- symbol "let"
     decls <- manyTill decl (symbol "{")
     body <- expr
-    symbol "}"
+    _ <- symbol "}"
     return $ ELet decls body
 
 args :: Parser [(T.Text, Type)]
 args = between (symbol "[") (symbol "]") $ sepBy1 parseArgs (symbol ",")
     where parseArgs = do
             name <- identifier
-            symbol ":"
+            _ <- symbol ":"
             ty <- typeParser
             return (name, ty)
 
 lambda :: Parser Expr
 lambda = do
-    symbol "lam"
+    _ <- symbol "lam"
     params <- args
     body <- block expr
     return $ ELambda params body
 
 fix :: Parser Expr
 fix = do
-    symbol "fix"
+    _ <- symbol "fix"
     EFix <$> expr
 
 builtin :: Parser Expr
@@ -197,18 +197,18 @@ expr = do
 
 decl :: Parser Decl
 decl = do
-        symbol "def"
+        _ <- symbol "def"
         name <- identifier
         funDecl name <|> nameDecl name
 
     where
         funDecl name = do
-            args <- args
+            as <- args
             body <- block expr
-            return $ FunDecl name args body
+            return $ FunDecl name as body
 
         nameDecl name = do
-            symbol "="
+            _ <- symbol "="
             Decl name <$> expr
 
 

@@ -4,10 +4,6 @@ import qualified CoreSyntaxTree as C
 import Type
 import qualified Env as E
 
-import qualified Data.Sequence as S
-
-import Control.Monad (foldM)
-
 type TypingEnv = E.Env Type
 
 -- We use the Either monad semantics to deal with errors compositionally
@@ -27,7 +23,7 @@ unifyTypes t1 t2
 typeCheck :: TypingEnv -> TypingEnv -> C.Expr -> TypeCheck Type
 typeCheck _ _ (C.BoolLit _) =  return TBool
 typeCheck d b (C.If cond tBranch fBranch) = do
-    typeCheck d b cond >>= unifyTypes TBool
+    _ <- typeCheck d b cond >>= unifyTypes TBool
     tBranchType <- typeCheck d b tBranch
     fBranchType <- typeCheck d b fBranch
     unifyTypes tBranchType fBranchType
@@ -47,7 +43,7 @@ typeCheck _ _ (C.BuiltinOp C.LessThan) = return $ TFunction TInt (TFunction TInt
 typeCheck _ _ (C.BuiltinOp C.GreaterThan) = return $ TFunction TInt (TFunction TInt TBool)
 typeCheck _ _ (C.BuiltinOp C.Equal) = return $ TFunction TInt (TFunction TInt TBool)
 
-typeCheck d b (C.Let name def body) = do
+typeCheck d b (C.Let _ def body) = do
     defType <- typeCheck d b def
     let newBoundEnv = E.bind defType b
     typeCheck d newBoundEnv body
@@ -60,10 +56,10 @@ typeCheck d b (C.Fix body) = do
         _ -> Left "Expected function as argument of fix"
 
 
-typeCheck d b (C.FreeVar name index) =
+typeCheck d _ (C.FreeVar name index) =
     maybe (Left $ "Undefined variable: " ++ show name) Right (E.lookup index d)
 
-typeCheck d b (C.BoundVar name index) =
+typeCheck _ b (C.BoundVar name index) =
     maybe (Left $ "Unbound variable: " ++ show name ++ " with index: " ++ show index)
           Right (E.lookup index b)
 
@@ -81,6 +77,6 @@ typeCheck d b (C.App f a) = do
     where partialApplyTypeCheck currTy aTy =
             case currTy of
                 TFunction dom cod -> do
-                    unifyTypes dom aTy
+                    _ <- unifyTypes dom aTy
                     return cod
                 t  -> Left $ "Expected function type, but got: " ++ show t

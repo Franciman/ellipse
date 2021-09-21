@@ -2,20 +2,11 @@
 module Eval where
     
 import qualified CoreSyntaxTree as C
-import Type
 import qualified Env as E
 import qualified Data.Text as T
-
-import qualified Data.Sequence as S
-
-import Data.Maybe (fromJust)
 import GHC.Generics
 
 import Control.DeepSeq
-import GHC.Exts
-import Data.IORef
-import System.IO.Unsafe
-import Debug.Trace
 
 -- We define an interpreter for our language directly on SyntaxTree terms.
 -- Since we allow definitions, how should we deal with them?
@@ -70,7 +61,7 @@ eval _ _ (C.FloatLit n)  = FloatLit n
 eval _ _ (C.StringLit n) = StringLit n
 
 -- `let x = f in g(x)` is interpreted as if it were (\x. g(x)) f
-eval e b (C.Let name def body) =
+eval e b (C.Let _ def body) =
     let defValue = eval e b def
         newBoundEnv = E.bind defValue b
     in eval e newBoundEnv body
@@ -78,7 +69,7 @@ eval e b (C.Let name def body) =
 -- The fix operator works like this: if we write,
 -- let f = fix (\f. g)
 -- then evaluating f gives us: g (fix (\f. g)) = g f .....
-eval e b f@(C.Fix body) =
+eval e b (C.Fix body) =
     -- the body must be a function, the result of fix v is
     -- a recursion value, which reminds us to keep looping,
     -- so what we do is bind the recursion value as the first argument
@@ -87,15 +78,15 @@ eval e b f@(C.Fix body) =
         res = eval e (E.bind res bodyB) body'
     in res
 
-eval e b (C.FreeVar _ index) = E.index index e
+eval e _ (C.FreeVar _ index) = E.index index e
 
-eval e b v@(C.BoundVar _ index) = E.index index b
+eval _ b (C.BoundVar _ index) = E.index index b
 
 -- We create a closure with respect to the current bound variables environment
-eval e b (C.Abs _  _ body) = Closure b body
+eval _ b (C.Abs _  _ body) = Closure b body
 
-eval e b (C.BuiltinOp C.Not) = Builtin b 1 C.Not
-eval e b (C.BuiltinOp op) = Builtin b 2 op
+eval _ b (C.BuiltinOp C.Not) = Builtin b 1 C.Not
+eval _ b (C.BuiltinOp op) = Builtin b 2 op
 
 -- This is the most subtle clause of all. Here we leverage well typedness a lot.
 -- First of all we can expect that the evaluation of the lhs results in a closure value,

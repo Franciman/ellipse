@@ -45,5 +45,5 @@ curryFunction args res = foldr TFunction res args
 -- the arity of a given function application.
 -- Constants have arity 0.
 arity :: Type -> Int
-arity (TFunction dom cod) = 1 + arity cod
+arity (TFunction _ cod) = 1 + arity cod
 arity _ = 0

@@ -5,11 +5,7 @@ import qualified CoreSyntaxTree as Core
 import qualified Data.Map.Strict as M
 import qualified Data.Sequence as S
 
-import qualified Env as E
-
 import Data.Foldable (foldl')
-import Control.Arrow (first)
-import GHC.Exts
 
 import Type
 
@@ -70,7 +66,7 @@ compile :: [Decl] -> [Core.Decl]
 compile = compile' M.empty
 
 compile' :: NamingEnv -> [Decl] -> [Core.Decl]
-compile' accessibleDefs [] = []
+compile' _ [] = []
 compile' accessibleDefs (d:ds) =
     -- We first compile this definition considering only accessible definitions
     let coreDecl = compileDecl accessibleDefs S.empty d
@@ -115,8 +111,8 @@ compileExpr _ _ (EBuiltinOp EEqual)       = Core.BuiltinOp Core.Equal
 -- it in a list of nested lets, maybe it is better to move
 -- the support for multiple lets in the core, as we did for multiple applications
 compileExpr env boundEnv (ELet decls body) =
-    let makeLet d body = let (Core.Decl name def) = compileDecl env boundEnv d
-                         in Core.Let name def body
+    let makeLet d b = let (Core.Decl name def) = compileDecl env boundEnv d
+                         in Core.Let name def b
         -- We need to bind all the definitions we introduced with the let
         newBoundEnv = addBindings (map declName decls) boundEnv
     in foldr makeLet (compileExpr env newBoundEnv body) decls
@@ -138,7 +134,7 @@ compileExpr env boundEnv (ELambda args body) =
     let argNames = map fst args
         newBoundEnv = addBindings argNames boundEnv
         compiledBody = compileExpr env newBoundEnv body
-    in foldr (\(name, ty) body -> Core.Abs name ty body) compiledBody args
+    in foldr (\(name, ty) b -> Core.Abs name ty b) compiledBody args
 
 compileExpr env boundEnv (EApp f as) =
     let compiledF  = compileExpr env boundEnv f
