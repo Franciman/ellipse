@@ -73,8 +73,8 @@ evalProgramE env (Core.Decl name body:ds) = do
     then return val
     else evalProgramE (E.bind val env) ds
 
-runInterpreter :: T.Text -> IO ()
-runInterpreter input = do
+runByteCodeInterpreter :: T.Text -> IO ()
+runByteCodeInterpreter input = do
     case parseProgram input of
         Left err -> putStrLn err
         Right defs -> do
@@ -86,4 +86,20 @@ runInterpreter input = do
                     -- to a core representation
                     let coreDefs = compile defs
                     res <- evalProgramCB E.empty coreDefs
+                    print res
+
+
+runTreeInterpreter :: T.Text -> IO ()
+runTreeInterpreter input = do
+    case parseProgram input of
+        Left err -> putStrLn err
+        Right defs -> do
+            -- Let us first check that there is no duplicate definition
+            case checkDuplicates (map declName defs) of
+                Just name -> putStrLn $ "Error duplicate definition of: " ++ show name
+                Nothing -> do
+                    -- there is no duplication, so we can convert our program
+                    -- to a core representation
+                    let coreDefs = compile defs
+                    res <- evalProgramE E.empty coreDefs
                     print res

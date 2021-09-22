@@ -67,41 +67,29 @@ instance NFData Value
 -- Externally we have to use Ints, because that's what we can use as index of the bytestring, sad.
 
 -- Addresses are represented as Ints, because that's what haskell allows to access ByteString
-type Counter s= STRef s Int
+type Counter = Int
 
 {-# INLINE getInstr #-}
-getInstr :: B.ByteString -> Counter s -> ST s Word8
-getInstr program counter = do
-    idx <- readSTRef counter
-    return (B.unsafeIndex program idx)
+getInstr :: B.ByteString -> Counter  -> Word8
+getInstr = B.unsafeIndex
 
--- Move the program counter
-{-# INLINE skip #-}
-skip :: Int -> Counter s -> ST s ()
-skip n counter = modifySTRef' counter (+ n)
-
-{-# INLINE next #-}
-next :: Counter s -> ST s ()
-next = skip 1
 
 -- Internally we represent addresses as words, though
 {-# INLINE readAddress #-}
-readAddress :: B.ByteString -> Counter s-> ST s Int
-readAddress bs counter = do
-    base <- readSTRef counter
+readAddress :: B.ByteString -> Counter -> (Counter, Int)
+readAddress bs base =
     let b0 = fromIntegral $ B.unsafeIndex bs (base + 0) `shift` 0
-    let b1 = fromIntegral $ B.unsafeIndex bs (base + 1) `shift` 8
-    let b2 = fromIntegral $ B.unsafeIndex bs (base + 2) `shift` 16
-    let b3 = fromIntegral $ B.unsafeIndex bs (base + 3) `shift` 24
-    let b4 = fromIntegral $ B.unsafeIndex bs (base + 4) `shift` 32
-    let b5 = fromIntegral $ B.unsafeIndex bs (base + 5) `shift` 40
-    let b6 = fromIntegral $ B.unsafeIndex bs (base + 6) `shift` 48
-    let b7 = fromIntegral $ B.unsafeIndex bs (base + 7) `shift` 56
-    let word = b0 .|. b1 .|. b2 .|. b3 .|. b4 .|. b5 .|. b6 .|. b7 :: Word64
+        b1 = fromIntegral $ B.unsafeIndex bs (base + 1) `shift` 8
+        b2 = fromIntegral $ B.unsafeIndex bs (base + 2) `shift` 16
+        b3 = fromIntegral $ B.unsafeIndex bs (base + 3) `shift` 24
+        b4 = fromIntegral $ B.unsafeIndex bs (base + 4) `shift` 32
+        b5 = fromIntegral $ B.unsafeIndex bs (base + 5) `shift` 40
+        b6 = fromIntegral $ B.unsafeIndex bs (base + 6) `shift` 48
+        b7 = fromIntegral $ B.unsafeIndex bs (base + 7) `shift` 56
+        word = b0 .|. b1 .|. b2 .|. b3 .|. b4 .|. b5 .|. b6 .|. b7 :: Word64
     -- traceM $ "Read address: " ++ show word
     -- Increment the counter to go to the end of the 8 bytes
-    skip 7 counter
-    return (fromIntegral word)
+    in (base + 7, fromIntegral word)
 
 -- Serialization utils
 writeAddress :: Int -> B.Builder
@@ -199,92 +187,71 @@ evalOp env 16 =
 
 evalOp _ _ = error "Impossible"
 
-runProgram :: Consts -> Env -> Env -> B.ByteString -> Counter s -> ST s Value
+runProgram :: Consts -> Env -> Env -> B.ByteString -> Counter  -> (Counter, Value)
 runProgram s e b prog c = do
-    instr <- getInstr prog c
+    let instr = getInstr prog c
     eval instr s e b prog c
 
-eval :: Word8 -> Consts -> Env -> Env -> B.ByteString -> Counter s-> ST s Value
+eval :: Word8 -> Consts -> Env -> Env -> B.ByteString -> Counter -> (Counter, Value)
 -- Const
-eval 0 s _ _ prog c = do
-    next c
-    idx <- readAddress prog c
-    return (V.unsafeIndex s idx)
+eval 0 s _ _ prog c =
+    let (c', idx) = readAddress prog (c + 1)
+    in (c', V.unsafeIndex s idx)
 
 -- BoundLookup
-eval 1 _ _ b prog c = do
-    next c
-    idx <- readAddress prog c
+eval 1 _ _ b prog c =
+    let (c', idx) = readAddress prog (c + 1)
     -- traceM $ "BoundLookup: " ++ show idx
-    return (E.index idx b)
+    in (c', E.index idx b)
 
 -- FreeLookup
-eval 2 _ e _ prog c = do
-    next c
-    idx <- readAddress prog c
+eval 2 _ e _ prog c =
+    let (c', idx) = readAddress prog (c + 1)
     -- traceM $ "FreeLookup: " ++ show idx
-    return (E.index idx e)
+    in (c', E.index idx e)
 
 -- Abs
-eval 3 s _ b prog c = do
-    next c
-    idx <- readAddress prog c
-    let Closure _ body = V.unsafeIndex s idx
-    return (Closure b body)
+eval 3 s _ b prog c =
+    let (c', idx) = readAddress prog (c + 1)
+        Closure _ body = V.unsafeIndex s idx
+    in (c', Closure b body)
 
 -- App
-eval 4 s e b prog c = do
-    next c
-    fVal <- runProgram s e b prog c
-    next c
-    aVal <- runProgram s e b prog c
-    case fVal of
-        Closure bEnv' body -> do
+eval 4 s e b prog c =
+    let (c', fVal) = runProgram s e b prog (c + 1)
+        (c'', aVal) = runProgram s e b prog (c' + 1)
+    in case fVal of
+        Closure bEnv' body ->
             let newBoundEnv = E.bind aVal bEnv'
-            oldCounter <- readSTRef c
-            writeSTRef c 0
-            res <- runProgram s e newBoundEnv body c
-            writeSTRef c oldCounter
-            return res
+                (_, res) = runProgram s e newBoundEnv body 0
+            in (c'', res)
 
-        BuiltinClosure bEnv' argsLeft op -> do
+        BuiltinClosure bEnv' argsLeft op ->
             let newBoundEnv = E.bind aVal bEnv'
-            if argsLeft - 1 > 0
-            then return (BuiltinClosure newBoundEnv (argsLeft - 1) op)
-            else return (evalOp newBoundEnv op)
+            in if argsLeft - 1 > 0
+                then (c'', BuiltinClosure newBoundEnv (argsLeft - 1) op)
+                else (c'', evalOp newBoundEnv op)
 
         _ -> error "Impossible"
 
 -- Fix
-eval 5 s e b prog c = do
-    next c
-    Closure bEnv' body <- runProgram s e b prog c
-    oldCounter <- readSTRef c
-    writeSTRef c 0
-    v <- fixST $ \res -> runProgram s e (E.bind res bEnv') body c
-    writeSTRef c oldCounter
-    return v
+eval 5 s e b prog c =
+    let (c', Closure bEnv' body) = runProgram s e b prog (c + 1)
+        (_, res) = runProgram s e (E.bind res bEnv') body 0
+    in (c', res)
 
 -- If
-eval 6 s e b prog c = do
-    next c
-    elseStart <- readAddress prog c
-    next c
-    elseEnd <- readAddress prog c
-    next c
-    BoolLit cond <- runProgram s e b prog c
-    if cond
-    then do
-        next c
-        v <- runProgram s e b prog c
-        skip elseEnd c
-        return v
-    else do
-        skip (elseStart + 1) c
-        runProgram s e b prog c
+eval 6 s e b prog c =
+    let (c', elseStart) = readAddress prog (c + 1)
+        (c'', elseEnd)  = readAddress prog (c' + 1)
+        (c''', BoolLit cond) = runProgram s e b prog (c'' + 1)
+    in if cond
+        then let (c4, v) = runProgram s e b prog (c''' + 1)
+             in (c4 + elseEnd, v)
+        else runProgram s e b prog (c''' + elseStart + 1)
 
 -- BuiltinOp
-eval n _ _ b _ _ = return (makeBuiltinClosure b n)
+eval n _ _ b _ c = (c, makeBuiltinClosure b n)
 
 
 -- AST compilation
@@ -424,8 +391,7 @@ runEval stack env expr = runST $ do
     stackRef <- newSTRef stack
     program <- renderBuilder <$> compileAST expr stackRef
     stack' <- readSTRef stackRef
-    counter <- newSTRef 0
     let consts = V.fromList (toList stack')
-    v <- runProgram consts env E.empty program counter
+    let (_, v) = runProgram consts env E.empty program 0
     return (stack', v)
  
