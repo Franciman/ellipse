@@ -85,8 +85,10 @@ eval _ b (C.BoundVar _ index) = E.index index b
 -- We create a closure with respect to the current bound variables environment
 eval _ b (C.Abs _  _ body) = Closure b body
 
-eval _ b (C.BuiltinOp C.Not) = Builtin b 1 C.Not
-eval _ b (C.BuiltinOp op) = Builtin b 2 op
+-- For builtins we don't need to store the current bound variables, because
+-- they don't contain any variable, they are atomic entities, so we create a new empty env
+eval _ _ (C.BuiltinOp C.Not) = Builtin E.empty 1 C.Not
+eval _ _ (C.BuiltinOp op) = Builtin E.empty 2 op
 
 -- This is the most subtle clause of all. Here we leverage well typedness a lot.
 -- First of all we can expect that the evaluation of the lhs results in a closure value,
@@ -94,8 +96,60 @@ eval _ b (C.BuiltinOp op) = Builtin b 2 op
 -- thanks to well typedness, so we insert them all in the environment, because sooner or later
 -- they will be used.
 --
--- Now, with recursion, we have two possibilities, not only the closure one,
--- but also
+eval e b (C.BuiltinAp2 op arg1 arg2) =
+    let op1 = eval e b arg1
+        op2 = eval e b arg2
+    in case op of
+           C.Sum ->
+               let (IntLit n2) = op2
+                   (IntLit n1) = op1
+               in IntLit (n1 + n2)
+
+           C.Sub ->
+               let (IntLit n2) = op2
+                   (IntLit n1) = op1
+               in IntLit (n1 - n2)
+
+           C.Prod ->
+               let (IntLit n2) = op2
+                   (IntLit n1) = op1
+               in IntLit (n1 * n2)
+
+           C.Div -> 
+               let (FloatLit n2) = op2
+                   (FloatLit n1) = op1
+               in FloatLit (n1 / n2)
+
+           C.And -> 
+               let (BoolLit n2) = op2
+                   (BoolLit n1) = op1
+               in BoolLit (n1 && n2)
+
+           C.Or -> 
+               let (BoolLit n2) = op2
+                   (BoolLit n1) = op1
+               in BoolLit (n1 || n2)
+
+           C.Not ->
+               let (BoolLit n1) = op2
+               in BoolLit (not n1)
+
+           C.LessThan ->
+               let (IntLit n2) = op2
+                   (IntLit n1) = op1
+               in BoolLit (n1 < n2)
+
+           C.GreaterThan ->
+               let (IntLit n2) = op2
+                   (IntLit n1) = op1
+               in BoolLit (n1 > n2)
+
+           C.Equal ->
+               let (IntLit n2) = op2
+                   (IntLit n1) = op1
+               in BoolLit (n1 == n2)
+
+
 eval e b (C.App f a) =
     case eval e b f of
         (Closure bEnv' body) ->

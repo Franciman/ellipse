@@ -1,8 +1,8 @@
-def sum = fix lam [sum: Int -> Int, n: Int] {
-cond {
-    (= n 0) ~> { 0 }
-    else ~> { + n (sum (- n 1)) }
-}
+def fib = fix lam[fib: Int -> Int, n: Int] {
+  cond {
+  (< n 2) ~> { n }
+  else ~> { + (fib (- n 1)) (fib (- n 2)) }
+  }
 }
 
-def main = sum 100000
+def main = fib 40

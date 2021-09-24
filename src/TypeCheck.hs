@@ -69,6 +69,8 @@ typeCheck d b (C.Abs _ ty body) = do
     codomainTy <- typeCheck d newBoundEnv body
     return (TFunction ty codomainTy)
 
+typeCheck d b (C.BuiltinAp2 op op1 op2) = typeCheck d b (C.App (C.App (C.BuiltinOp op) op1) op2)
+
 typeCheck d b (C.App f a) = do
         fTy <- typeCheck d b f
         aTy <- typeCheck d b a

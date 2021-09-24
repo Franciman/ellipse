@@ -42,6 +42,8 @@ data Expr = If Expr Expr Expr
            -- ^ For abstractions we do the same, we keep the original name of the bound variables
            -- ^ Together with their types (necessary for typechecking)
            | App Expr Expr
+           -- We want to optimize fully applied binary operations
+           | BuiltinAp2 BuiltinOp Expr Expr
            deriving(Show, Generic)
 
 instance NFData Expr

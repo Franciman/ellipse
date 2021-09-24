@@ -136,7 +136,16 @@ compileExpr env boundEnv (ELambda args body) =
         compiledBody = compileExpr env newBoundEnv body
     in foldr (\(name, ty) b -> Core.Abs name ty b) compiledBody args
 
+-- Here we try to spot builtins that are fully applied.
+-- They are at most binary operations, so we check for binary ops
 compileExpr env boundEnv (EApp f as) =
-    let compiledF  = compileExpr env boundEnv f
-        compiledAs = map (compileExpr env boundEnv) as
-    in foldl' Core.App compiledF compiledAs
+    case f of
+        EBuiltinOp op | length as == 2 ->
+            let Core.BuiltinOp compiledOp = compileExpr env boundEnv (EBuiltinOp op)
+                compiledArg1 = compileExpr env boundEnv (head as)
+                compiledArg2 = compileExpr env boundEnv (head (tail as))
+            in Core.BuiltinAp2 compiledOp compiledArg1 compiledArg2
+        _ ->
+            let compiledF  = compileExpr env boundEnv f
+                compiledAs = map (compileExpr env boundEnv) as
+            in foldl' Core.App compiledF compiledAs
