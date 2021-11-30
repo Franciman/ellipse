@@ -15,17 +15,17 @@ import Control.DeepSeq
 -- the environment too uses index based accessing.
 
 newtype Env a = Env
-    { unwrap :: S.Seq a
+    { unwrap :: [a]
     }
     deriving(Show, NFData)
 
 empty :: Env a
-empty = Env S.empty
+empty = Env []
 
 -- We only support adding a new binding for the 0 variable (and shifting all the other indices),
 -- this makes the implementation easier to be correct.
 bind :: a -> Env a -> Env a
-bind info (Env s) = Env $ info S.<| s
+bind info (Env s) = Env $ info : s
 
 -- Bind many variables, from left to right
 {-# INLINE bindMany #-}
@@ -35,9 +35,11 @@ bindMany xs e = foldl' (flip bind) e xs
 -- Lookup info associated to the given variable, if any
 {-# INLINE lookup #-}
 lookup :: Int -> Env a -> Maybe a
-lookup idx (Env s) = S.lookup idx s
+lookup idx (Env s)
+    | 0 <= idx && idx < length s = Just $ s !! idx
+    | otherwise                  = Nothing
 
 -- Unsafe lookup
 {-# INLINE index #-}
 index :: Int -> Env a -> a
-index idx = fromJust . Env.lookup idx
+index idx (Env s) = s !! idx
